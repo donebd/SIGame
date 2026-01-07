@@ -1,0 +1,33 @@
+{
+  "name": "SIGame",
+  "version": "1.0.0",
+  "description": "SIGame - Open Source Selfhosted Web Quiz Game with Admin Panel and TV Screen",
+  "main": "dist/SIGame.html",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "serve": "webpack serve --mode development",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "quiz",
+    "game",
+    "music",
+    "lotto",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "css-loader": "^6.8.1",
+    "html-webpack-plugin": "^5.5.3",
+    "mini-css-extract-plugin": "^2.9.4",
+    "style-loader": "^3.3.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.1"
+  }
+}

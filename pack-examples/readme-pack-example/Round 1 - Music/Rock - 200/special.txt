@@ -1,0 +1,2 @@
+﻿bet
+This is a betting question, you can put as many points as you want.
