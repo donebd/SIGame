@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIGame v1.0</title>
+</head>
+
+<body>
+    <audio id="master-audio"></audio>
+    <video id="master-video" style="display:none;"></video>
+
+    <!-- Модальное окно для открытия TV -->
+    <div id="tv-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 data-i18n="modal_title_tv">📺 Открыть игровой экран</h2>
+            <p data-i18n="modal_desc_tv">Выберите режим открытия игрового экрана (TV):</p>
+
+            <div style="margin: 20px 0;">
+                <button class="btn btn-main" style="width:100%; margin-bottom:10px;" id="open-new-tab">
+                    <span data-i18n="new_tab">🆕 Новая вкладка</span>
+                </button>
+                <p style="font-size:0.9em; color:#aaa; text-align:center; margin-bottom:20px;" data-i18n="new_tab_desc">
+                    Откроет игровой экран в новой вкладке браузера
+                </p>
+
+                <button class="btn btn-sec" style="width:100%; margin-bottom:10px;" id="open-popup">
+                    <span data-i18n="popup">🪟 Всплывающее окно</span>
+                </button>
+                <p style="font-size:0.9em; color:#aaa; text-align:center; margin-bottom:20px;" data-i18n="popup_desc">
+                    Откроет игровой экран в отдельном всплывающем окне
+                </p>
+
+                <button class="btn btn-ghost" style="width:100%; margin-bottom:10px;" id="open-same">
+                    <span data-i18n="switch_view">🔄 Переключить вид</span>
+                </button>
+                <p style="font-size:0.9em; color:#aaa; text-align:center;" data-i18n="switch_view_desc">
+                    Переключит текущую вкладку в режим TV
+                </p>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-ghost" id="close-tv-modal" data-i18n="cancel">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div id="admin-ui" class="hidden">
+        <div class="sidebar">
+            <h2 data-i18n="gm_panel">🎮 Панель GM</h2>
+            <div>
+                <label for="folder-input" class="btn btn-sec"
+                    style="width:100%; display:block; text-align:center; cursor:pointer; margin-bottom:5px;"
+                    data-i18n="choose_files">
+                    Выбрать файлы
+                </label>
+                <input type="file" id="folder-input" webkitdirectory directory multiple
+                    style="width:100%; display:none;">
+                <div id="load-status" style="font-size:12px; color:#888; margin-top:5px;" data-i18n="file_not_selected">
+                    Файл не выбран</div>
+            </div>
+            <hr style="width:100%; border:0; border-top:1px solid #444;">
+
+            <div id="round-control-panel" class="hidden">
+                <h3 data-i18n="round_management">🎯 Управление раундами</h3>
+                <div id="round-selector" style="display: flex; gap: 5px; margin-bottom: 10px;"></div>
+            </div>
+
+            <div>
+                <div id="admin-players"></div>
+                <div style="display: flex; gap: 5px; margin-top:10px;">
+                    <button class="btn btn-sec" style="flex:1;" id="add-player-btn" data-i18n="add_player">+ Добавить
+                        игрока</button>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <button class="btn btn-tv" id="open-tv-btn" data-i18n="open_tv">📺 Открыть TV экран</button>
+
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn btn-main" style="flex:1;" id="save-btn" data-i18n="save">💾 Сохранить</button>
+                    <button class="btn btn-sec" style="flex:1;" id="load-btn" data-i18n="load">📂 Загрузить</button>
+                </div>
+
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn btn-ghost" style="flex:1;" id="snow-toggle">
+                        <span>❄️ Снег: ВКЛ</span>
+                    </button>
+                </div>
+
+                <button class="btn btn-danger" style="width:100%" id="reset-btn" data-i18n="reset_game">🛑 Сброс
+                    игры</button>
+
+                <hr style="width:100%; border:0; border-top:1px solid #444; margin: 15px 0;">
+
+                <!-- Update GitHub URL with your repository URL -->
+                <a href="https://github.com/donebd/SIGame" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-ghost github-btn"
+                    style="text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                    <span data-i18n="github">GitHub</span>
+                </a>
+
+                <button class="btn btn-ghost" id="lang-toggle" style="width:100%;"
+                    title="Switch language / Переключить язык">
+                    <span>🌐 EN</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="main-area">
+            <div id="grid-view">
+                <div style="width:100%; text-align:center; padding:50px; color:#555;">
+                    <h3 data-i18n="load_folder_prompt">📂 Загрузите папку с игрой</h3>
+
+                    <div
+                        style="margin-top: 20px; text-align: left; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; display: inline-block;">
+                        <strong data-i18n="folder_structure_title">📂 Структура папки</strong>
+                        <p data-i18n="folder_structure_desc">Пример структуры:</p>
+                        <pre
+                            style="background: rgba(0,0,0,0.3); padding: 10px; margin-top: 10px; border-radius: 4px; text-align: left;">
+📁 Game Name/
+  📁 Round 1/
+     📁 <span data-i18n="folder_example_theme">Theme</span> 1 - 100/
+        📄 question.txt / .mp3 / .mp4
+        📄 answer.txt / .mp3 / .mp4
+     📁 <span data-i18n="folder_example_cat">Cat in a Bag</span> - 200/
+        ...
+  📁 Round 2/
+     ...
+  📁 Final/
+     ...
+                        <div style="margin-top: 15px;">
+                            <strong data-i18n="question_folder_structure">Структура папки вопроса:</strong>
+                            <ul style="margin-top: 5px; list-style: none; padding-left: 10px;">
+                                <li><code>question.*</code> - <span data-i18n="question_label">Вопрос</span> (txt, mp3,
+                                    mp4)</li>
+                                <li><code>answer.*</code> - <span data-i18n="answer">Ответ</span> (txt, mp3, mp4)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="round-control" class="hidden">
+                <div class="round-top-bar">
+                    <button class="btn btn-ghost" id="back-to-grid-btn" data-i18n="back_to_grid">⬅️ Назад к
+                        сетке</button>
+                    <label class="status-toggle">
+                        <input type="checkbox" id="played-status-checkbox">
+                        <span style="font-size:1.2em; color:var(--warn)" data-i18n="question_played">✅ Вопрос
+                            сыгран</span>
+                    </label>
+                    <div style="font-size:1.2em; font-weight:bold; color:var(--secondary)" id="current-round-info">
+                    </div>
+                </div>
+
+                <div id="admin-question-panel" class="admin-question-panel">
+                    <h3 id="admin-question-type"></h3>
+                    <div id="admin-question-content"></div>
+                    <div id="admin-answer-content" class="hidden"></div>
+                </div>
+
+                <div class="player-controls" id="audio-controls">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span id="player-track-name" style="color:#aaa"></span>
+                        <input type="range" min="0" max="1" step="0.05" value="1" id="volume-slider"
+                            style="width:100px">
+                    </div>
+                    <div class="timeline-container">
+                        <button class="btn btn-main btn-lg" id="play-btn">▶️</button>
+                        <span class="time-display" id="time-current">0:00</span>
+                        <input type="range" id="seek-bar" value="0" min="0" step="0.1">
+                        <span class="time-display" id="time-total">0:00</span>
+                    </div>
+                </div>
+
+                <div id="video-controls" class="player-controls hidden">
+                    <div class="video-player">
+                        <video id="master-video-display" muted></video>
+                        <div class="timeline-container">
+                            <button class="btn btn-main" id="video-play-btn-small">▶️</button>
+                            <span class="time-display" id="video-time-current">0:00</span>
+                            <input type="range" id="video-seek-bar" value="0" min="0" step="0.1" style="flex: 1;">
+                            <span class="time-display" id="video-time-total">0:00</span>
+                        </div>
+                        <div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center;">
+                            <button class="btn btn-ghost" id="video-seek-back-30">⏪ -30с</button>
+                            <button class="btn btn-ghost" id="video-seek-back-10">⏪ -10с</button>
+                            <button class="btn btn-ghost" id="video-seek-forward-10">+10с ⏩</button>
+                            <button class="btn btn-ghost" id="video-seek-forward-30">+30с ⏩</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px;">
+                    <div>
+
+                        <div class="preview-box" id="mashup-preview">
+                            <div class="preview-item">
+                                <img id="admin-img-music" class="preview-img">
+                                <button class="btn btn-sec" id="reveal-music-btn" data-i18n="reveal_music">🎵 Показать Музыку</button>
+                            </div>
+                            <div class="preview-item">
+                                <img id="admin-img-text" class="preview-img">
+                                <button class="btn btn-sec" id="reveal-text-btn" data-i18n="reveal_text">📝 Показать
+                                    Текст</button>
+                            </div>
+                        </div>
+
+                        <div id="question-controls" class="hidden">
+                            <button id="show-question-btn" class="btn btn-sec" style="width:100%; margin-bottom:10px;"
+                                data-i18n="show_question">
+                                ❓ Показать вопрос
+                            </button>
+                            <button id="show-answer-btn" class="btn btn-main btn-lg" style="width:100%"
+                                data-i18n="show_answer">
+                                🎯 ПОКАЗАТЬ ОТВЕТ
+                            </button>
+                        </div>
+
+                        <button class="btn btn-ghost" style="width:100%; margin-top:10px;" id="confetti-btn"
+                            data-i18n="trigger_confetti">
+                            🎉 Запустить конфетти
+                        </button>
+                    </div>
+
+                    <div style="background:#222; padding:15px; border-radius:8px;">
+                        <h4 style="margin-top:0" data-i18n="points_label">Баллы</h4>
+                        <select id="winner-select"
+                            style="width:100%; padding:8px; margin-bottom:10px; background:#333; color:#fff; border:none;"></select>
+                        <div style="display:flex; gap:5px; flex-direction:column;">
+                            <button class="btn btn-main" id="award-full-btn" data-i18n="award_full">+ Полный</button>
+                            <button class="btn btn-sec" id="award-half-btn" data-i18n="award_half">+ Половина</button>
+                            <button class="btn btn-danger" id="award-minus-btn" data-i18n="award_minus">- Штраф</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TV -->
+    <div id="game-screen" class="hidden">
+        <div id="holiday-banner" class="holiday-banner" style="display: none;" data-i18n="new_year_greeting">🎄 С Новым
+            Годом! 🎅</div>
+        <div id="holiday-lights" class="holiday-lights"></div>
+        <div id="snow-overlay" class="snow-overlay"></div>
+        <div id="round-transition-overlay">
+            <div class="round-transition-text" id="round-transition-text"></div>
+        </div>
+
+        <div id="tv-grid" class="tv-grid-container hidden"></div>
+
+        <div id="tv-round" class="tv-round-container hidden">
+            <div id="tv-normal-question" class="hidden">
+                <div class="content-wrapper">
+                    <div id="tv-round-info" class="round-info">
+                        <span id="tv-round-category"></span> — <span id="tv-round-score"></span> баллов
+                        <span id="tv-round-type" style="font-size:0.8em; margin-left:10px;"></span>
+                    </div>
+
+                    <div id="tv-mashup-content" class="hidden">
+                        <div id="tv-song-title" class="song-reveal-title"></div>
+                        <div class="visualizer" id="tv-viz">
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                        </div>
+                        <div class="covers-wrapper">
+                            <div class="tv-cover-box" id="tv-box-music">
+                                <div class="cover-placeholder">🎵</div>
+                            </div>
+                            <div class="tv-cover-box" id="tv-box-text">
+                                <div class="cover-placeholder">📝</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tv-audio-content" class="hidden">
+                        <div id="tv-audio-question" class="tv-question-text"></div>
+                        <div id="tv-audio-question-media" class="tv-question-media"></div>
+                        <div class="audio-visualizer" id="tv-audio-viz"></div>
+                        <div id="tv-audio-answer" class="tv-answer-text hidden"></div>
+                        <div id="tv-audio-answer-media" class="tv-answer-media hidden"></div>
+                    </div>
+
+                    <div id="tv-video-content" class="hidden">
+                        <div id="tv-video-question" class="tv-question-text"></div>
+                        <div id="tv-video-question-media" class="tv-question-media"></div>
+                        <div class="video-player">
+                            <video id="tv-video-player" style="width:100%; max-height:60vh;"></video>
+                            <div style="margin: 10px 20px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span class="time-display" id="tv-video-current">0:00</span>
+                                    <input type="range" id="tv-video-seek-bar" value="0" min="0" step="0.1"
+                                        style="flex: 1;" disabled>
+                                    <span class="time-display" id="tv-video-total">0:00</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="tv-video-answer" class="tv-answer-text hidden"></div>
+                        <div id="tv-video-answer-media" class="tv-answer-media hidden"></div>
+                    </div>
+
+                    <div id="tv-text-content" class="hidden">
+                        <div id="tv-text-question" class="tv-question-text"></div>
+                        <div id="tv-text-question-media" class="tv-question-media"></div>
+                        <div id="tv-text-answer" class="tv-answer-text hidden"></div>
+                        <div id="tv-text-answer-media" class="tv-answer-media hidden"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tv-special-preview" class="hidden"></div>
+        </div>
+
+        <div class="tv-footer" id="tv-scoreboard"></div>
+    </div>
+</body>
+
+</html>

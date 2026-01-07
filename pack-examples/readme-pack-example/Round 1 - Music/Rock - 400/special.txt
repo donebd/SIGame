@@ -1,0 +1,3 @@
+﻿auction
+This question is an auction question. The team with the highest bid wins.
+

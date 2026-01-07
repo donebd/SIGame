@@ -1,0 +1,3 @@
+﻿cat
+This question can be passed on to another team. If the team answers correctly, they will receive double points; if they answer incorrectly, they will lose points.
+
