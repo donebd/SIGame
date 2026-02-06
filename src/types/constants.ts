@@ -2,16 +2,16 @@
  * Application constants
  */
 
-export const APP_VERSION = '1.0.0';
-export const BROADCAST_CHANNEL_NAME = 'sigame_v1';
+export const APP_VERSION = '2.0.0';
+export const BROADCAST_CHANNEL_NAME = 'sigame_v2';
 export const SAVE_DEBOUNCE = 2000;
 export const AUTO_SAVE_INTERVAL = 30000;
 export const VIDEO_SYNC_INTERVAL = 500;
 
 export const STORAGE_KEYS = {
-  GAME_STATE: 'sigame_v1_state',
-  PLAYERS: 'sigame_v1_players',
-  SNOW_ENABLED: 'sigame_v1_snow_enabled',
+  GAME_STATE: 'sigame_v2_state',
+  PLAYERS: 'sigame_v2_players',
+  SNOW_ENABLED: 'sigame_v2_snow_enabled',
 } as const;
 
 export const QUESTION_TYPE_ICONS: Record<string, string> = {
@@ -19,6 +19,7 @@ export const QUESTION_TYPE_ICONS: Record<string, string> = {
   audio: '🎧',
   video: '🎬',
   text: '📝',
+  select: '📋',
 };
 
 export const QUESTION_TYPE_NAMES: Record<string, string> = {
@@ -26,6 +27,7 @@ export const QUESTION_TYPE_NAMES: Record<string, string> = {
   audio: 'Аудио',
   video: 'Видео',
   text: 'Текст',
+  select: 'Выбор',
 };
 
 export const SPECIAL_TYPE_ICONS: Record<string, string> = {

@@ -14,6 +14,12 @@ interface Translations {
 
 const translations: Translations = {
   // Common
+  current_package: { ru: 'Текущий пакет:', en: 'Current Package:' },
+  show_results: { ru: '🏆 Показать итоги', en: '🏆 Show Results' },
+  results_on_screen: { ru: '🏆 Итоги на экране', en: '🏆 Results on Screen' },
+  click_round_to_return: { ru: 'Нажмите на раунд слева, чтобы вернуться к игре.', en: 'Click a round on the left to return to the game.' },
+  back_to_game: { ru: '🔙 Вернуться к вопросам', en: '🔙 Back to Questions' },
+  winners_title: { ru: 'ПОБЕДИТЕЛИ', en: 'WINNERS' },
   github: { ru: 'GitHub', en: 'GitHub' },
   lang_switch_to_en: { ru: '🌐 Switch to English', en: '🌐 Switch to English' },
   lang_switch_to_ru: { ru: '🌐 Switch to Russian', en: '🌐 Переключить на русский' },
@@ -41,10 +47,12 @@ const translations: Translations = {
   question_type_audio: { ru: 'Аудио', en: 'Audio' },
   question_type_video: { ru: 'Видео', en: 'Video' },
   question_type_text: { ru: 'Текст', en: 'Text' },
+  question_type_select: { ru: 'Выбор', en: 'Selection' },
   question_mashup: { ru: 'Мешап двух песен:', en: 'Mashup of two songs:' },
   question_audio: { ru: 'Аудио вопрос:', en: 'Audio question:' },
   question_video: { ru: 'Видео вопрос:', en: 'Video question:' },
   question_text: { ru: 'Текстовый вопрос:', en: 'Text question:' },
+  question_select: { ru: 'Выбор варианта:', en: 'Multiple choice:' },
   answer: { ru: 'Ответ:', en: 'Answer:' },
   question_label: { ru: 'Вопрос:', en: 'Question:' },
   question_not_specified: { ru: 'Вопрос не указан', en: 'Question not specified' },
@@ -114,8 +122,10 @@ const translations: Translations = {
   choose_files: { ru: 'Выбрать файлы', en: 'Choose files' },
   files_loaded: { ru: 'Пак загружен', en: 'Pack loaded' },
   files_loading: { ru: 'Загрузка...', en: 'Loading...' },
+  loading: { ru: 'Загрузка...', en: 'Loading...' },
   rounds_count: { ru: 'Раундов', en: 'Rounds' },
   questions_count: { ru: 'Вопросов', en: 'Questions' },
+  import_siq: { ru: 'Импорт .siq', en: 'Import .siq' },
 
   // Confetti
   trigger_confetti: { ru: '🎉 Запустить конфетти', en: '🎉 Launch Confetti' },
@@ -131,6 +141,7 @@ const translations: Translations = {
 
   // Category
   no_category: { ru: 'Без категории', en: 'No category' },
+  error: { ru: 'Ошибка', en: 'Error' },
 };
 
 let currentLanguage: Language = (localStorage.getItem('game_language') as Language) || 'ru';

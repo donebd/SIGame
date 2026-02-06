@@ -5,6 +5,7 @@
 
 import {
   GameState,
+  GameMode,
   Player,
   Question,
   Rounds,
@@ -47,6 +48,14 @@ export class GameStateManager {
     if (roundNames.length > 0 && !roundNames.includes(this.state.currentRoundName)) {
       this.state.currentRoundName = roundNames[0];
     }
+    this.state.lastUpdated = Date.now();
+  }
+
+  /**
+   * Set loaded folder name
+   */
+  setLoadedFolder(folderName: string | null): void {
+    this.state.loadedFolder = folderName;
     this.state.lastUpdated = Date.now();
   }
 
@@ -157,7 +166,7 @@ export class GameStateManager {
   /**
    * Set game mode
    */
-  setMode(mode: 'GRID' | 'ROUND'): void {
+  setMode(mode: GameMode): void {
     this.state.mode = mode;
     this.state.lastUpdated = Date.now();
   }
@@ -245,6 +254,33 @@ export class GameStateManager {
   }
 
   /**
+   * Set round type
+   */
+  setRoundType(roundName: string, type: 'regular' | 'final'): void {
+    if (!this.state.roundTypes) this.state.roundTypes = {};
+    this.state.roundTypes[roundName] = type;
+    this.state.lastUpdated = Date.now();
+  }
+
+  /**
+   * Ban a theme
+   */
+  banTheme(themeName: string): void {
+    if (!this.state.bannedThemes.includes(themeName)) {
+      this.state.bannedThemes.push(themeName);
+      this.state.lastUpdated = Date.now();
+    }
+  }
+
+  /**
+   * Clear banned themes
+   */
+  clearBannedThemes(): void {
+    this.state.bannedThemes = [];
+    this.state.lastUpdated = Date.now();
+  }
+
+  /**
    * Reset state
    */
   reset(): void {
@@ -274,7 +310,18 @@ export class GameStateManager {
       loadedFolder: null,
       currentRoundName: 'round1',
       roundNames: [],
+      roundTypes: {},
+      bannedThemes: [],
       specialMode: null,
+      packageName: undefined,
     };
+  }
+
+  /**
+   * Set package name
+   */
+  setPackageName(name: string): void {
+    this.state.packageName = name;
+    this.state.lastUpdated = Date.now();
   }
 }

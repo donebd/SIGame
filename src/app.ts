@@ -4,13 +4,16 @@
  */
 
 import './styles.css';
+import './results.css';
 import { GameStateManager } from './state/GameState';
 import { StorageService } from './services/StorageService';
 import { SyncService } from './services/SyncService';
 import { FileService } from './services/FileService';
+import { SiqService } from './services/SiqService';
 import { AudioController } from './media/AudioController';
 import { VideoController } from './media/VideoController';
 import { AdminUI } from './ui/AdminUI';
+import { FinalRoundView } from './ui/FinalRoundView';
 import { TVScreen } from './ui/TVScreen';
 import { GameState, Question, FileStorage, RoundData, SerializedGameState, BroadcastMessage } from './types/index';
 import { fileToBase64, getSpecialTypeName } from './utils/helpers';
@@ -21,6 +24,7 @@ const stateManager = new GameStateManager();
 const storageService = new StorageService();
 const syncService = new SyncService();
 const fileService = new FileService();
+const siqService = new SiqService();
 
 // Flag to prevent double processing of folder load
 let isFolderLoading = false;
@@ -31,6 +35,7 @@ const isGameScreen = params.get('screen') === 'game';
 
 // Initialize UI
 let adminUI: AdminUI | null = null;
+let finalRoundView: FinalRoundView | null = null;
 let tvScreen: TVScreen | null = null;
 let audioController: AudioController | null = null;
 let videoController: VideoController | null = null;
@@ -49,6 +54,21 @@ if (isGameScreen) {
 function initAdminScreen(): void {
   adminUI = new AdminUI('admin-ui');
   adminUI.show();
+
+  // Init Final Round View
+  const gridView = document.getElementById('grid-view');
+  if (gridView && gridView.parentNode) {
+    const finalContainer = document.createElement('div');
+    finalContainer.id = 'final-round-container';
+    finalContainer.classList.add('hidden');
+    gridView.parentNode.insertBefore(finalContainer, gridView.nextSibling);
+
+    finalRoundView = new FinalRoundView(
+      finalContainer,
+      handleBanTheme,
+      handlePlayFinalQuestion
+    );
+  }
 
   const audioElement = document.getElementById('master-audio') as HTMLAudioElement;
   const videoElement = document.getElementById('master-video') as HTMLVideoElement;
@@ -90,11 +110,11 @@ function initAdminScreen(): void {
 
   // Initialize i18n
   updateAllTranslations();
-  
+
   // Load saved game state
   const savedState = storageService.loadGameState();
   if (savedState) {
-    const loadText = getLanguage() === 'ru' 
+    const loadText = getLanguage() === 'ru'
       ? `Загрузить сохранение от ${new Date(savedState.serializedAt).toLocaleString()}?`
       : `Load save from ${new Date(savedState.serializedAt).toLocaleString()}?`;
     if (confirm(loadText)) {
@@ -189,6 +209,9 @@ function initTVScreen(): void {
  * Setup admin event listeners
  */
 function setupAdminEventListeners(): void {
+  // Handle .siq input
+  document.getElementById('siq-input')?.addEventListener('change', handleSiqLoad);
+
   // File input
   const folderInput = document.getElementById('folder-input') as HTMLInputElement;
   const folderLabel = document.querySelector('label[for="folder-input"]');
@@ -196,16 +219,16 @@ function setupAdminEventListeners(): void {
     // Remove any existing listeners to prevent duplicates
     const newInput = folderInput.cloneNode(true) as HTMLInputElement;
     folderInput.parentNode?.replaceChild(newInput, folderInput);
-    
+
     // Add event listener to the new input (only once)
     newInput.addEventListener('change', handleFolderLoad, { once: false });
-    
+
     // Update label click to trigger file input
     if (folderLabel) {
       // Remove existing listeners
       const newLabel = folderLabel.cloneNode(true) as HTMLLabelElement;
       folderLabel.parentNode?.replaceChild(newLabel, folderLabel);
-      
+
       newLabel.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -222,6 +245,33 @@ function setupAdminEventListeners(): void {
   });
 
   document.getElementById('save-btn')?.addEventListener('click', () => {
+    storageService.saveGameState(stateManager.getState());
+  });
+
+  // Show results button
+  document.getElementById('open-results-btn')?.addEventListener('click', () => {
+    stateManager.setMode('RESULTS');
+
+    // Switch UI
+    const gridView = document.getElementById('grid-view');
+    const roundControl = document.getElementById('round-control');
+    const finalContainer = document.getElementById('final-round-container');
+    const resultsView = document.getElementById('admin-results-view');
+
+    if (gridView) gridView.classList.add('hidden');
+    if (roundControl) roundControl.classList.add('hidden');
+    if (finalContainer) finalContainer?.classList.add('hidden');
+    if (resultsView) resultsView.classList.remove('hidden');
+
+    syncService.syncState(stateManager.getState());
+    storageService.saveGameState(stateManager.getState());
+  });
+
+  // Back to game button (from results)
+  document.getElementById('back-to-game-btn')?.addEventListener('click', () => {
+    stateManager.setMode('GRID');
+    renderAdminUI();
+    syncService.syncState(stateManager.getState());
     storageService.saveGameState(stateManager.getState());
   });
 
@@ -246,13 +296,13 @@ function setupAdminEventListeners(): void {
       }
     }
   };
-  
+
   document.getElementById('lang-toggle')?.addEventListener('click', () => {
     const newLang = getLanguage() === 'ru' ? 'en' : 'ru';
     setLanguage(newLang);
     updateAllTranslations();
     updateLangButton();
-    
+
     // Update snow toggle button text manually (it's dynamic based on state)
     const snowToggle = document.getElementById('snow-toggle');
     if (snowToggle) {
@@ -264,10 +314,10 @@ function setupAdminEventListeners(): void {
         snowToggle.textContent = isSnowEnabled ? t('snow') : t('snow_off');
       }
     }
-    
+
     renderAdminUI();
   });
-  
+
   // Initialize lang button text after DOM is ready
   setTimeout(() => {
     updateLangButton();
@@ -355,6 +405,8 @@ function setupAdminEventListeners(): void {
     }
 
     // Reset state
+    stateManager.setPlaying(false);
+    stateManager.setVideoPlaying(false);
     stateManager.setMode('GRID');
     stateManager.setCurrentQuestion(null);
     stateManager.setVisibility({ music: false, text: false, question: false, answer: false });
@@ -364,7 +416,7 @@ function setupAdminEventListeners(): void {
     const roundControl = document.getElementById('round-control');
     if (gridView) gridView.classList.remove('hidden');
     if (roundControl) roundControl.classList.add('hidden');
-    
+
     renderAdminUI();
     syncService.syncState(stateManager.getState());
     storageService.saveGameState(stateManager.getState());
@@ -543,14 +595,14 @@ function setupQuestionControls(): void {
   document.getElementById('reveal-music-btn')?.addEventListener('click', () => {
     const question = stateManager.getCurrentQuestion();
     if (!question || question.type !== 'mashup') return;
-    
+
     if (!stateManager.getState().visible.music) {
       stateManager.setVisibility({ music: true });
       syncService.triggerAnimation('music');
       syncService.syncState(stateManager.getState());
       storageService.saveGameState(stateManager.getState());
     }
-    
+
     // Show image in admin panel
     if (question.previewMusic) {
       const img = document.getElementById('admin-img-music') as HTMLImageElement;
@@ -565,14 +617,14 @@ function setupQuestionControls(): void {
   document.getElementById('reveal-text-btn')?.addEventListener('click', () => {
     const question = stateManager.getCurrentQuestion();
     if (!question || question.type !== 'mashup') return;
-    
+
     if (!stateManager.getState().visible.text) {
       stateManager.setVisibility({ text: true });
       syncService.triggerAnimation('text');
       syncService.syncState(stateManager.getState());
       storageService.saveGameState(stateManager.getState());
     }
-    
+
     // Show image in admin panel
     if (question.previewText) {
       const img = document.getElementById('admin-img-text') as HTMLImageElement;
@@ -587,30 +639,57 @@ function setupQuestionControls(): void {
   document.getElementById('show-question-btn')?.addEventListener('click', () => {
     const question = stateManager.getCurrentQuestion();
     if (!question || question.type === 'mashup') return;
-    
-    if (!stateManager.getState().visible.question) {
-      stateManager.setVisibility({ question: true });
-      syncService.triggerAnimation('question');
-      syncService.syncState(stateManager.getState());
-      storageService.saveGameState(stateManager.getState());
-    }
+
+    // Switch to question view (hide answer)
+    stateManager.setVisibility({ question: true, answer: false });
+    syncService.triggerAnimation('question');
+    syncService.syncState(stateManager.getState());
+    storageService.saveGameState(stateManager.getState());
   });
 
   // Show answer button
   document.getElementById('show-answer-btn')?.addEventListener('click', () => {
-    if (!stateManager.getState().visible.answer) {
-      const question = stateManager.getCurrentQuestion();
-      stateManager.setVisibility({ answer: true });
-      
-      if (question && question.type === 'mashup') {
-        syncService.triggerTitleAnimation();
-      } else {
-        syncService.triggerAnimation('answer');
-      }
-      
-      syncService.syncState(stateManager.getState());
-      storageService.saveGameState(stateManager.getState());
+    const question = stateManager.getCurrentQuestion();
+
+    // Switch to answer view (hide question)
+    // Note: For mashup, 'question' flag is not used for boxes (music/text flags are used), 
+    // so this won't hide mashup boxes, which is likely desired.
+    // Also reveal hidden mashup parts (music/text) when showing answer
+    const visibilityUpdates: any = { question: false, answer: true };
+
+    if (question && question.type === 'mashup') {
+      visibilityUpdates.music = true;
+      visibilityUpdates.text = true;
     }
+
+    stateManager.setVisibility(visibilityUpdates);
+
+    // Pause video if playing
+    if (videoController && videoController.isPlaying()) {
+      videoController.pause();
+      stateManager.setVideoPlaying(false);
+    }
+
+    // Switch master player to answer video if available
+    const currentQ = stateManager.getCurrentQuestion();
+    if (currentQ && videoController) {
+      const files = fileStorage[currentQ.id];
+      if (files && files.answerVideo) {
+        // Create a temporary URL for the admin player
+        const answerVideoUrl = URL.createObjectURL(files.answerVideo);
+        videoController.setSource(answerVideoUrl);
+      }
+    }
+
+
+    if (question && question.type === 'mashup') {
+      syncService.triggerTitleAnimation();
+    } else {
+      syncService.triggerAnimation('answer');
+    }
+
+    syncService.syncState(stateManager.getState());
+    storageService.saveGameState(stateManager.getState());
   });
 
   // Confetti button
@@ -696,27 +775,114 @@ function updateVideoPlayButtonText(): void {
 }
 
 /**
+ * Handle .siq load
+ */
+async function handleSiqLoad(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) return;
+
+  // Prevent double processing
+  if (isFolderLoading) {
+    input.value = '';
+    return;
+  }
+
+  isFolderLoading = true;
+
+  // Update status
+  const loadStatus = document.getElementById('siq-load-status');
+  if (loadStatus) {
+    loadStatus.textContent = t('loading'); // "Загрузка..."
+    loadStatus.style.color = '#03dac6';
+  }
+
+  try {
+    const file = input.files[0];
+    input.value = ''; // Clear input
+
+    const result = await siqService.parseSiq(file);
+
+    // Merge file storage
+    fileStorage = { ...fileStorage, ...result.fileStorage };
+
+    // Set round types
+    if (result.roundTypes) {
+      Object.entries(result.roundTypes).forEach(([name, type]) => {
+        stateManager.setRoundType(name, type);
+      });
+    }
+
+    // Create game state - preserve order of appearance
+    const roundNames: string[] = [];
+    const roundData = result.questions.reduce((acc, q) => {
+      if (!acc[q.round]) {
+        acc[q.round] = [];
+        roundNames.push(q.round);
+      }
+      acc[q.round].push(q);
+      return acc;
+    }, {} as Record<string, Question[]>);
+
+    // Sort questions within rounds by score
+    Object.values(roundData).forEach(questions => {
+      questions.sort((a, b) => a.score - b.score);
+    });
+
+    // Set game state - NO SORT for roundNames
+    stateManager.setRounds(roundData, roundNames);
+    stateManager.setLoadedFolder(file.name.replace('.siq', ''));
+    stateManager.setPackageName(file.name);
+
+    // Restore current round
+    if (stateManager.getState().currentRoundName && roundNames.includes(stateManager.getState().currentRoundName)) {
+      // Keep current
+    } else if (roundNames.length > 0) {
+      stateManager.setCurrentRoundName(roundNames[0]);
+    }
+
+    renderAdminUI();
+    syncService.syncState(stateManager.getState());
+    storageService.saveGameState(stateManager.getState());
+
+    if (loadStatus) {
+      const totalQuestions = result.questions.length;
+      const roundsCount = roundNames.length;
+      loadStatus.textContent = `${t('files_loaded')}: ${roundsCount} ${t('rounds_count')}, ${totalQuestions} ${t('questions_count')}`;
+    }
+
+  } catch (error) {
+    console.error('Error loading .siq:', error);
+    if (loadStatus) {
+      loadStatus.textContent = t('error') + ': ' + (error as Error).message;
+      loadStatus.style.color = 'var(--error)';
+    }
+  } finally {
+    isFolderLoading = false;
+  }
+}
+
+/**
  * Handle folder load
  */
 async function handleFolderLoad(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
   if (!input.files || input.files.length === 0) return;
-  
+
   // Prevent double processing
   if (isFolderLoading) {
     input.value = ''; // Clear input but don't process
     return;
   }
-  
+
   isFolderLoading = true;
-  
+
   // Update status to loading
   const loadStatus = document.getElementById('load-status');
   if (loadStatus) {
     loadStatus.textContent = t('files_loading');
     loadStatus.style.color = '#03dac6';
   }
-  
+
   try {
     // Store files before clearing input (to prevent double processing)
     const files = Array.from(input.files);
@@ -728,7 +894,7 @@ async function handleFolderLoad(event: Event): Promise<void> {
     const currentState = stateManager.getState();
     const savedPlayers = [...currentState.players];
     const savedRoundsState: { [roundName: string]: { [key: string]: boolean } } = {};
-    
+
     // Save played status for each question
     for (const roundName in currentState.rounds) {
       savedRoundsState[roundName] = {};
@@ -770,8 +936,8 @@ async function handleFolderLoad(event: Event): Promise<void> {
     }
 
     // Set rounds (this will update state)
-    stateManager.setRounds(rounds, roundNames.sort());
-    
+    stateManager.setRounds(rounds, roundNames);
+
     // Restore players if they exist
     if (savedPlayers.length > 0) {
       stateManager.setPlayers(savedPlayers);
@@ -785,7 +951,7 @@ async function handleFolderLoad(event: Event): Promise<void> {
     renderAdminUI();
     syncService.syncState(stateManager.getState());
     storageService.saveGameState(stateManager.getState());
-    
+
     // Update load status with success message
     const loadStatus = document.getElementById('load-status');
     if (loadStatus) {
@@ -824,7 +990,7 @@ async function loadGameState(savedState: SerializedGameState): Promise<void> {
   }
   renderAdminUI();
   syncService.syncState(stateManager.getState());
-  
+
   // Show warning about needing to load folder
   showStateRestoreWarning();
 }
@@ -845,11 +1011,11 @@ function animateRoundSwitch(callback: () => void): void {
 
   setTimeout(() => {
     callback();
-    
+
     // After callback, fade in and animate categories
     requestAnimationFrame(() => {
       gridView.style.opacity = '1';
-      
+
       // Animate categories appearing one by one
       const categoryBlocks = gridView.querySelectorAll('.category-block');
       categoryBlocks.forEach((block, index) => {
@@ -857,7 +1023,7 @@ function animateRoundSwitch(callback: () => void): void {
         categoryElement.style.opacity = '0';
         categoryElement.style.transform = 'translateY(20px)';
         categoryElement.style.transition = 'opacity 0.4s ease-out, transform 0.4s ease-out';
-        
+
         setTimeout(() => {
           categoryElement.style.opacity = '1';
           categoryElement.style.transform = 'translateY(0)';
@@ -900,9 +1066,9 @@ function showStateRestoreWarning(): void {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(warningDiv);
-  
+
   // Auto-remove after 10 seconds
   setTimeout(() => {
     if (warningDiv.parentNode) {
@@ -910,6 +1076,29 @@ function showStateRestoreWarning(): void {
       setTimeout(() => warningDiv.remove(), 300);
     }
   }, 10000);
+}
+
+/**
+ * Handle banning a theme in Final Round
+ */
+function handleBanTheme(theme: string): void {
+  const state = stateManager.getState();
+  stateManager.banTheme(theme);
+
+  // Update view
+  if (finalRoundView) {
+    const currentQuestions = stateManager.getCurrentRoundQuestions();
+    finalRoundView.render(currentQuestions, stateManager.getState().bannedThemes);
+  }
+
+  syncService.syncState(stateManager.getState());
+}
+
+/**
+ * Handle playing the final question
+ */
+function handlePlayFinalQuestion(question: Question): void {
+  selectQuestion(question.id);
 }
 
 /**
@@ -923,16 +1112,16 @@ function renderAdminUI(): void {
 
   adminUI.renderPlayers(
     state.players,
-    (id, name) => {
+    (id: number, name: string) => {
       stateManager.updatePlayerName(id, name);
       renderAdminUI();
       syncService.syncState(stateManager.getState());
     },
-    (id, score) => {
+    (id: number, score: number) => {
       stateManager.updatePlayerScore(id, score);
       syncService.syncState(stateManager.getState());
     },
-    (id) => {
+    (id: number) => {
       if (stateManager.removePlayer(id)) {
         renderAdminUI();
         syncService.syncState(stateManager.getState());
@@ -940,42 +1129,96 @@ function renderAdminUI(): void {
     }
   );
 
-  adminUI.renderGrid(currentRoundQuestions, (id) => {
-    selectQuestion(id);
-  });
+  const isFinalRound = state.roundTypes?.[state.currentRoundName] === 'final';
+  const gridView = document.getElementById('grid-view');
+  const finalContainer = document.getElementById('final-round-container');
+  const roundControl = document.getElementById('round-control');
+  const resultsView = document.getElementById('admin-results-view');
+
+  if (isFinalRound && finalRoundView && state.mode === 'GRID') {
+    // Hide Grid AND Round Control, Show Final Round View
+    if (gridView) {
+      if (!finalContainer) {
+        const newFinalContainer = document.createElement('div');
+        newFinalContainer.id = 'final-round-container';
+        newFinalContainer.style.height = '100%';
+        gridView.parentNode?.insertBefore(newFinalContainer, gridView.nextSibling);
+      }
+
+      gridView.classList.add('hidden');
+      if (roundControl) roundControl.classList.add('hidden');
+      if (resultsView) resultsView.classList.add('hidden');
+
+      const activeFinalContainer = document.getElementById('final-round-container');
+      if (activeFinalContainer) {
+        activeFinalContainer.classList.remove('hidden');
+        finalRoundView.render(currentRoundQuestions, state.bannedThemes);
+      }
+    }
+  } else {
+    // Hide final round view if not active
+    const activeFinalContainer = document.getElementById('final-round-container');
+    if (activeFinalContainer) activeFinalContainer.classList.add('hidden');
+
+    if (state.mode === 'ROUND') {
+      if (gridView) gridView.classList.add('hidden');
+      if (finalContainer) finalContainer.classList.add('hidden');
+      if (roundControl) roundControl.classList.remove('hidden');
+      if (resultsView) resultsView.classList.add('hidden');
+    } else if (state.mode === 'RESULTS') {
+      if (gridView) gridView.classList.add('hidden');
+      if (finalContainer) finalContainer.classList.add('hidden');
+      if (roundControl) roundControl.classList.add('hidden');
+      if (resultsView) resultsView.classList.remove('hidden');
+    } else {
+      // If we are in GRID mode, show grid, hide round control/final
+      if (gridView) gridView.classList.remove('hidden');
+      if (roundControl) roundControl.classList.add('hidden');
+      if (finalContainer) finalContainer.classList.add('hidden');
+      if (resultsView) resultsView.classList.add('hidden');
+    }
+
+    // Only render grid if not in a final round themes view
+    adminUI.renderGrid(currentRoundQuestions, (id: string) => {
+      selectQuestion(id);
+    });
+  }
 
   adminUI.renderRoundSelector(
     state.roundNames,
     state.currentRoundName,
     (roundName) => {
-      // Animate round switch
-      animateRoundSwitch(() => {
+      // Check if target round is final
+      const isNextFinal = state.roundTypes?.[roundName] === 'final';
+
+      const switchAction = () => {
         stateManager.setCurrentRoundName(roundName);
         stateManager.setMode('GRID');
+
+        // Reset opacity if we came from animation
         const gridView = document.getElementById('grid-view');
-        const roundControl = document.getElementById('round-control');
-        if (gridView) gridView.classList.remove('hidden');
-        if (roundControl) roundControl.classList.add('hidden');
+        if (gridView) gridView.style.opacity = '1';
+
         renderAdminUI();
         syncService.syncState(stateManager.getState());
-      });
+      };
+
+      if (isNextFinal) {
+        // No animation for final round, just switch
+        switchAction();
+      } else {
+        // Animate grid switch
+        animateRoundSwitch(switchAction);
+      }
     }
   );
 
-  // Update round control visibility
-  const roundControl = document.getElementById('round-control');
-  if (roundControl) {
-    if (state.mode === 'ROUND' && state.currentQuestionId) {
-      roundControl.classList.remove('hidden');
-      const gridView = document.getElementById('grid-view');
-      if (gridView) gridView.classList.add('hidden');
-    } else {
-      roundControl.classList.add('hidden');
-      const gridView = document.getElementById('grid-view');
-      if (gridView) gridView.classList.remove('hidden');
-    }
-  }
+  adminUI.renderGameInfo(state);
 }
+
+
+
+
 
 /**
  * Select question
@@ -985,7 +1228,14 @@ async function selectQuestion(questionId: string): Promise<void> {
   if (!question) return;
 
   // Reset visibility when selecting new question
-  stateManager.setVisibility({ music: false, text: false, question: false, answer: false });
+  // Auto-show question for audio and text types
+  const shouldShowQuestion = question.type === 'audio' || question.type === 'text' || question.type === 'video' || question.type === 'select';
+  stateManager.setVisibility({
+    music: false,
+    text: false,
+    question: shouldShowQuestion,
+    answer: false
+  });
 
   stateManager.setCurrentQuestion(questionId);
   stateManager.setMode('ROUND');
@@ -1000,7 +1250,7 @@ async function selectQuestion(questionId: string): Promise<void> {
   // Handle special types
   if (question.specialType) {
     stateManager.setSpecialMode(question.specialType);
-    
+
     const specialTypeName = question.specialType ? getSpecialTypeName(question.specialType) : '';
     let specialIcon = '';
     if (question.specialType) {
@@ -1087,7 +1337,12 @@ async function selectQuestion(questionId: string): Promise<void> {
   // Update round info
   const roundInfo = document.getElementById('current-round-info');
   if (roundInfo) {
-    roundInfo.textContent = `${question.category} — ${question.score} ${t('points')}`;
+    const isFinalRound = stateManager.getState().roundTypes?.[question.round] === 'final';
+    if (isFinalRound) {
+      roundInfo.textContent = question.category;
+    } else {
+      roundInfo.textContent = `${question.category} — ${question.score} ${t('points')}`;
+    }
   }
 
   // Load media
@@ -1129,6 +1384,7 @@ async function selectQuestion(questionId: string): Promise<void> {
     score: question.score,
     question: question.question,
     answer: question.answer,
+    answerOptions: question.answerOptions,
   };
 
   const files = fileStorage[questionId];
@@ -1143,7 +1399,7 @@ async function selectQuestion(questionId: string): Promise<void> {
         roundData.audio = await fileToBase64(files.audio);
       }
     }
-    
+
     // Original question media
     if (question.type === 'audio' && files.audio) {
       roundData.audio = await fileToBase64(files.audio);
@@ -1151,7 +1407,7 @@ async function selectQuestion(questionId: string): Promise<void> {
     if (question.type === 'video' && files.video) {
       roundData.video = await fileToBase64(files.video);
     }
-    
+
     // Question media (for all types)
     if (files.questionImage) {
       roundData.questionImage = await fileToBase64(files.questionImage);
@@ -1162,7 +1418,7 @@ async function selectQuestion(questionId: string): Promise<void> {
     if (files.questionAudio) {
       roundData.questionAudio = await fileToBase64(files.questionAudio);
     }
-    
+
     // Answer media (for all types)
     if (files.answerImage) {
       roundData.answerImage = await fileToBase64(files.answerImage);
@@ -1178,6 +1434,7 @@ async function selectQuestion(questionId: string): Promise<void> {
   syncService.sendRoundData(roundData);
   syncService.syncState(stateManager.getState());
   storageService.saveGameState(stateManager.getState());
+  renderAdminUI();
 }
 
 /**
@@ -1188,13 +1445,26 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
   if (!question) return;
 
   stateManager.setSpecialMode(null);
-  stateManager.setVisibility({ music: false, text: false, question: false, answer: false });
+
+  // Auto-show question for audio and text types
+  const shouldShowQuestion = question.type === 'audio' || question.type === 'text' || question.type === 'video' || question.type === 'select';
+  stateManager.setVisibility({
+    music: false,
+    text: false,
+    question: shouldShowQuestion,
+    answer: false
+  });
   stateManager.markQuestionPlayed(questionId, true);
 
   // Update round info
   const roundInfo = document.getElementById('current-round-info');
   if (roundInfo) {
-    roundInfo.textContent = `${question.category} — ${question.score} ${t('points')}`;
+    const isFinalRound = stateManager.getState().roundTypes?.[question.round] === 'final';
+    if (isFinalRound) {
+      roundInfo.textContent = question.category;
+    } else {
+      roundInfo.textContent = `${question.category} — ${question.score} ${t('points')}`;
+    }
   }
 
   // Load media
@@ -1236,6 +1506,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
     score: question.score,
     question: question.question,
     answer: question.answer,
+    answerOptions: question.answerOptions,
   };
 
   const files = fileStorage[questionId];
@@ -1250,7 +1521,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
         roundData.audio = await fileToBase64(files.audio);
       }
     }
-    
+
     // Original question media
     if (question.type === 'audio' && files.audio) {
       roundData.audio = await fileToBase64(files.audio);
@@ -1258,7 +1529,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
     if (question.type === 'video' && files.video) {
       roundData.video = await fileToBase64(files.video);
     }
-    
+
     // Question media (for all types)
     if (files.questionImage) {
       roundData.questionImage = await fileToBase64(files.questionImage);
@@ -1269,7 +1540,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
     if (files.questionAudio) {
       roundData.questionAudio = await fileToBase64(files.questionAudio);
     }
-    
+
     // Answer media (for all types)
     if (files.answerImage) {
       roundData.answerImage = await fileToBase64(files.answerImage);
@@ -1286,6 +1557,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
   setTimeout(() => {
     syncService.syncState(stateManager.getState());
     storageService.saveGameState(stateManager.getState());
+    renderAdminUI();
   }, 100);
 }
 
@@ -1317,7 +1589,7 @@ function handleTVMessage(message: BroadcastMessage): void {
         const roundData = message.data as Record<string, unknown>;
         (window as Window & { roundData?: Record<string, unknown> }).roundData = roundData;
         tvScreen.setRoundData(roundData);
-        
+
         // Initialize video if needed
         if (roundData.type === 'video' && roundData.video && typeof roundData.video === 'string') {
           setTimeout(() => {
@@ -1334,7 +1606,7 @@ function handleTVMessage(message: BroadcastMessage): void {
                 // Assume it's a blob URL or regular URL
                 tvVideo.src = videoSrc;
               }
-              
+
               tvVideo.ontimeupdate = () => {
                 const current = document.getElementById('tv-video-current');
                 const total = document.getElementById('tv-video-total');
@@ -1346,7 +1618,7 @@ function handleTVMessage(message: BroadcastMessage): void {
                   seekBar.value = tvVideo.currentTime.toString();
                 }
               };
-              
+
               tvVideo.onloadedmetadata = () => {
                 const total = document.getElementById('tv-video-total');
                 const seekBar = document.getElementById('tv-video-seek-bar') as HTMLInputElement;

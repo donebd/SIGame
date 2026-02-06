@@ -38,17 +38,297 @@ export class TVScreen extends BaseUI {
     this.renderScoreboard(state.players || [], scoreboard);
 
     // Render based on mode
+    const isFinalRound = state.roundTypes?.[state.currentRoundName] === 'final';
+
     if (state.mode === 'GRID') {
-      this.renderGrid(state, grid, round, normalQuestion, specialPreview);
+      if (isFinalRound) {
+        this.renderFinalRound(state, grid, round, normalQuestion, specialPreview);
+      } else {
+        this.renderGrid(state, grid, round, normalQuestion, specialPreview);
+      }
     } else if (state.mode === 'ROUND') {
       this.renderRound(state, grid, round, normalQuestion, specialPreview);
+    } else if (state.mode === 'RESULTS') {
+      this.renderResults(state, grid, round, normalQuestion, specialPreview);
     } else {
-      // Default to grid if mode is not set
-      this.renderGrid(state, grid, round, normalQuestion, specialPreview);
+      // Default
+      if (isFinalRound) {
+        this.renderFinalRound(state, grid, round, normalQuestion, specialPreview);
+      } else {
+        this.renderGrid(state, grid, round, normalQuestion, specialPreview);
+      }
     }
 
     // Handle round transition animation
     this.handleRoundTransition(state);
+  }
+
+  /**
+   * Render results selection (Podium)
+   */
+  private renderResults(
+    state: GameState,
+    grid: HTMLElement,
+    round: HTMLElement,
+    normalQuestion: HTMLElement | null,
+    specialPreview: HTMLElement | null
+  ): void {
+    const resultsContainer = document.getElementById('tv-results-container');
+    const finalRoundView = document.getElementById('tv-final-round');
+    if (!resultsContainer) return;
+
+    // Toggle visibility
+    grid.classList.add('hidden');
+    round.classList.add('hidden');
+    if (normalQuestion) normalQuestion.classList.add('hidden');
+    if (specialPreview) specialPreview.classList.add('hidden');
+    if (finalRoundView) finalRoundView.classList.add('hidden');
+    resultsContainer.classList.remove('hidden');
+
+    // Sort players by score
+    const players = [...state.players].sort((a, b) => b.score - a.score);
+
+    // Group players by score
+    const scoreGroups: { score: number, players: Player[] }[] = [];
+    players.forEach(p => {
+      const lastGroup = scoreGroups[scoreGroups.length - 1];
+      if (lastGroup && lastGroup.score === p.score) {
+        lastGroup.players.push(p);
+      } else {
+        scoreGroups.push({ score: p.score, players: [p] });
+      }
+    });
+
+    // Assign ranks (Gold, Silver, Bronze)
+    interface RankingGroup {
+      rank: number;
+      players: Player[];
+      placeClass: number; // 1, 2, 3 for style
+    }
+
+    const podiumGroups: RankingGroup[] = [];
+    const loserPlayers: Player[] = [];
+
+    // We only care about visual "steps": Step 1 (Winner), Step 2, Step 3
+    // Any remaining groups are losers
+    scoreGroups.forEach((group, index) => {
+      if (index < 3) {
+        podiumGroups.push({
+          rank: index + 1,
+          players: group.players,
+          placeClass: index + 1
+        });
+      } else {
+        loserPlayers.push(...group.players);
+      }
+    });
+
+    // Default podium order: Rank 2 (Left), Rank 1 (Center), Rank 3 (Right)
+    const visualOrder: RankingGroup[] = [];
+
+    // 2nd Place (Left) logic: Exists if we have rank 2
+    const rank2 = podiumGroups.find(g => g.rank === 2);
+    if (rank2) visualOrder.push(rank2);
+
+    // 1st Place (Center) logic: Exists if we have rank 1
+    const rank1 = podiumGroups.find(g => g.rank === 1);
+    if (rank1) visualOrder.push(rank1);
+
+    // 3rd Place (Right) logic: Exists if we have rank 3
+    const rank3 = podiumGroups.find(g => g.rank === 3);
+    if (rank3) visualOrder.push(rank3);
+
+    // Build HTML
+    let html = `
+      <div class="winners-arch">
+        <div class="arch-text">${t('winners_title')}</div>
+      </div>
+      <div class="podium">
+    `;
+
+    visualOrder.forEach(group => {
+      const place = group.placeClass; // 1, 2, 3
+
+      let headContent = '';
+      if (place === 1) headContent = '😎';
+      else if (place === 2) headContent = '🙂';
+      else if (place === 3) headContent = '🥴';
+
+      // Render characters container
+      let charsHtml = `<div style="display:flex; justify-content:center; gap:5px;">`;
+      group.players.forEach(p => {
+        let actionExtras = '';
+        // 3rd Place: add champagne bottle div (medal is CSS pseudo-element)
+        if (place === 3) {
+          actionExtras = `<div class="action-item">🍾</div>`;
+        }
+
+        charsHtml += `
+            <div class="character character-${place}">
+                <div class="head">${headContent}</div>
+                <div class="body"></div>
+                ${actionExtras}
+            </div>
+            `;
+      });
+      charsHtml += `</div>`;
+
+      // Render info card (combined)
+      const names = group.players.map(p => `<span class="res-name-item color-${p.id}">${p.name}</span>`).join(', ');
+
+      let infoHtml = `
+            <div class="player-info-card">
+                <div class="res-name">${names}</div>
+                <div class="res-score">${group.players[0].score}</div>
+            </div>
+      `;
+
+      html += `
+        <div class="place-column place-${place}">
+            ${charsHtml}
+            <div class="pedestal">
+                <div class="pedestal-number">${place}</div>
+            </div>
+            <div class="info-container">
+                ${infoHtml}
+            </div>
+        </div>
+        `;
+    });
+
+    html += `</div>`;
+
+    // Render Crowd
+    if (loserPlayers.length > 0) {
+      html += `<div class="losers-crowd">`;
+      loserPlayers.forEach((p, i) => {
+        html += `
+            <div class="loser-item" style="--i: ${i}">
+                <div class="head">😐</div>
+                <div class="body"></div>
+                <div class="res-name color-${p.id}">${p.name}</div>
+                <div class="res-score">${p.score}</div>
+            </div>
+            `;
+      });
+      html += `</div>`;
+    }
+
+    // Add confettif for celebration if just switched
+    // We could trigger confetti here but TVScreen creates new fireworks usually.
+    // Let's add built-in confetti logic if available or just keep it simple.
+
+    // Add effects
+    html += `
+    <div class="orchestra">
+      <div class="musician-char"><div class="head">🙂</div><div class="body"></div><div class="instrument">🎻</div></div>
+      <div class="musician-char"><div class="head">🙂</div><div class="body"></div><div class="instrument">🎻</div></div>
+      <div class="musician-char"><div class="head">🙂</div><div class="body"></div><div class="instrument">🎺</div></div>
+      <div class="musician-char"><div class="head">🙂</div><div class="body"></div><div class="instrument">🎷</div></div>
+    </div>
+    
+    <div class="paparazzi-group">
+      <div class="flash" style="top:20%; left:10%; animation-delay:0s"></div>
+      <div class="flash" style="top:40%; left:80%; animation-delay:1s"></div>
+      <div class="flash" style="top:70%; left:30%; animation-delay:2s"></div>
+      <div class="flash" style="top:10%; left:70%; animation-delay:1.5s"></div>
+      <div class="flash" style="top:60%; left:20%; animation-delay:0.5s"></div>
+      <div class="flash" style="top:30%; left:90%; animation-delay:2.5s"></div>
+    </div>
+
+    <div class="confetti-container">
+      ${Array.from({ length: 50 }).map(() => {
+      const left = Math.random() * 100;
+      const delay = Math.random() * 4;
+      const duration = 3 + Math.random() * 2;
+      const bg = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f'][Math.floor(Math.random() * 6)];
+      return `<div class="confetti-piece" style="left:${left}%; animation-delay:${delay}s; animation-duration:${duration}s; background:${bg};"></div>`
+    }).join('')}
+    </div>
+    `;
+
+    resultsContainer.innerHTML = html;
+  }
+
+  /**
+   * Render Final Round
+   */
+  private renderFinalRound(
+    state: GameState,
+    grid: HTMLElement,
+    round: HTMLElement,
+    normalQuestion: HTMLElement | null,
+    specialPreview: HTMLElement | null
+  ): void {
+    const finalRoundView = document.getElementById('tv-final-round');
+    if (!finalRoundView) return;
+
+    // Toggle visibility
+    grid.classList.add('hidden');
+    round.classList.add('hidden');
+    if (normalQuestion) normalQuestion.classList.add('hidden');
+    if (specialPreview) specialPreview.classList.add('hidden');
+    finalRoundView.classList.remove('hidden');
+
+    // Get current round questions
+    const currentRound = state.currentRoundName
+      ? state.rounds[state.currentRoundName] || []
+      : [];
+
+    // Render themes
+    finalRoundView.innerHTML = '';
+
+    const container = document.createElement('div');
+    container.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 30px;
+    `;
+
+    const title = document.createElement('h1');
+    title.textContent = 'ФИНАЛ';
+    title.style.cssText = `
+        font-size: 4em;
+        color: var(--accent);
+        text-shadow: 0 0 20px rgba(3, 218, 198, 0.5);
+        margin-bottom: 20px;
+    `;
+    container.appendChild(title);
+
+    const themesGrid = document.createElement('div');
+    themesGrid.style.cssText = `
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        width: 100%;
+        max-width: 1200px;
+        justify-content: center;
+    `;
+
+    currentRound.forEach(q => {
+      const isBanned = state.bannedThemes.includes(q.category);
+      const themeEl = document.createElement('div');
+      themeEl.textContent = q.category;
+      themeEl.style.cssText = `
+            background: ${isBanned ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.1)'};
+            padding: 30px;
+            text-align: center;
+            font-size: 2em;
+            border-radius: 15px;
+            border: 2px solid ${isBanned ? '#555' : 'var(--accent)'};
+            color: ${isBanned ? '#777' : '#fff'};
+            text-decoration: ${isBanned ? 'line-through' : 'none'};
+            transition: all 0.5s ease;
+            opacity: ${isBanned ? '0.5' : '1'};
+        `;
+      themesGrid.appendChild(themeEl);
+    });
+
+    container.appendChild(themesGrid);
+    finalRoundView.appendChild(container);
   }
 
   /**
@@ -158,6 +438,21 @@ export class TVScreen extends BaseUI {
   }
 
   /**
+   * Stop all media (video and audio)
+   */
+  private stopMedia(): void {
+    const video = document.getElementById('tv-video-player') as HTMLVideoElement;
+    if (video) {
+      video.pause();
+    }
+    // Stop round specific media if any
+    const roundMediaElements = document.querySelectorAll('#tv-round video, #tv-round audio');
+    roundMediaElements.forEach((el) => {
+      (el as HTMLMediaElement).pause();
+    });
+  }
+
+  /**
    * Render grid mode
    */
   private renderGrid(
@@ -167,8 +462,16 @@ export class TVScreen extends BaseUI {
     normalQuestion: HTMLElement | null,
     specialPreview: HTMLElement | null
   ): void {
+    // Stop any playing media when returning to grid
+    this.stopMedia();
+
+    const finalRoundView = document.getElementById('tv-final-round');
+    const resultsContainer = document.getElementById('tv-results-container');
+
     grid.classList.remove('hidden');
     round.classList.add('hidden');
+    if (finalRoundView) finalRoundView.classList.add('hidden');
+    if (resultsContainer) resultsContainer.classList.add('hidden');
     if (normalQuestion) normalQuestion.classList.add('hidden');
     if (specialPreview) specialPreview.classList.add('hidden');
 
@@ -215,7 +518,10 @@ export class TVScreen extends BaseUI {
     specialPreview: HTMLElement | null
   ): void {
     const wasHidden = round.classList.contains('hidden');
+    const finalRoundView = document.getElementById('tv-final-round');
+
     grid.classList.add('hidden');
+    if (finalRoundView) finalRoundView.classList.add('hidden');
     round.classList.remove('hidden');
 
     // Animate round info entrance ONLY if it was previously hidden
@@ -292,19 +598,25 @@ export class TVScreen extends BaseUI {
 
     // Update round info
     const categoryEl = document.getElementById('tv-round-category');
-    const scoreEl = document.getElementById('tv-round-score');
-    const typeEl = document.getElementById('tv-round-type');
 
     if (categoryEl) categoryEl.textContent = currentQuestion.category || t('no_category');
-    if (scoreEl) scoreEl.textContent = (currentQuestion.score || 0).toString();
-    if (typeEl) {
-      const typeName = getTypeName(currentQuestion.type);
-      const specialName = currentQuestion.specialType ? getSpecialTypeName(currentQuestion.specialType) : '';
-      typeEl.innerHTML = `${getTypeIcon(currentQuestion.type)} ${specialName || typeName}`;
+
+    // Check if final round
+    const isFinalRound = state.roundTypes?.[currentQuestion.round] === 'final';
+
+    const roundInfo = document.getElementById('tv-round-info');
+    if (roundInfo) {
+      if (isFinalRound) {
+        // Only show category - the structure is Category — Score баллов
+        roundInfo.innerHTML = `<span id="tv-round-category">${currentQuestion.category || t('no_category')}</span><span id="tv-round-score" class="hidden"></span>`;
+      } else {
+        // Normal layout
+        roundInfo.innerHTML = `<span id="tv-round-category">${currentQuestion.category || t('no_category')}</span> — <span id="tv-round-score">${(currentQuestion.score || 0)}</span> баллов`;
+      }
     }
 
     // Update UI for question type
-    this.updateUIForQuestionType(currentQuestion, state.visible || {});
+    this.updateUIForQuestionType(currentQuestion, state);
 
     // Apply text scaling
     setTimeout(() => {
@@ -336,19 +648,26 @@ export class TVScreen extends BaseUI {
   /**
    * Update UI for question type
    */
-  private updateUIForQuestionType(question: Question, visible: any): void {
-    const type = question.type || 'mashup';
+  private updateUIForQuestionType(question: Question, state: GameState): void {
+    const visible = state.visible || {};
+
+    const qType = question.type || 'mashup';
+    // Get roundData from window (set by LOAD_ROUND_DATA message)
+    const roundData = (window as any).roundData || this.roundData;
 
     // Hide all content types ONLY if they are not the current one
     ['mashup', 'audio', 'video', 'text'].forEach((t) => {
-      if (t !== type) {
+      // For 'select' type, we use the 'text' container
+      const containerType = qType === 'select' ? 'text' : qType;
+      if (t !== containerType) {
         const el = document.getElementById(`tv-${t}-content`);
         if (el) el.classList.add('hidden');
       }
     });
 
     // Show current type
-    const currentContent = document.getElementById(`tv-${type}-content`);
+    const activeContainerType = qType === 'select' ? 'text' : qType;
+    const currentContent = document.getElementById(`tv-${activeContainerType}-content`);
     if (currentContent) {
       if (currentContent.classList.contains('hidden')) {
         currentContent.classList.remove('hidden');
@@ -359,7 +678,7 @@ export class TVScreen extends BaseUI {
       }
     }
 
-    switch (type) {
+    switch (qType) {
       case 'mashup':
         const title = document.getElementById('tv-song-title');
         if (title) {
@@ -384,10 +703,16 @@ export class TVScreen extends BaseUI {
         const audioQuestionMedia = document.getElementById('tv-audio-question-media');
         const audioAnswerMedia = document.getElementById('tv-audio-answer-media');
 
-        if (audioQuestion) audioQuestion.textContent = question.question || '';
+        if (audioQuestion) {
+          const text = question.question || '';
+          audioQuestion.textContent = text;
+          // Hide question text if question is not visible or text is empty
+          audioQuestion.classList.toggle('hidden', !visible.question || !text.trim());
+        }
         if (audioAnswer) {
-          audioAnswer.textContent = question.answer || '';
-          audioAnswer.classList.toggle('hidden', !visible.answer);
+          const text = question.answer || '';
+          audioAnswer.textContent = text;
+          audioAnswer.classList.toggle('hidden', !visible.answer || !text.trim());
         }
 
         // Update question media (use roundData, not blob URLs)
@@ -411,17 +736,33 @@ export class TVScreen extends BaseUI {
         const videoQuestionMedia = document.getElementById('tv-video-question-media');
         const videoAnswerMedia = document.getElementById('tv-video-answer-media');
 
-        if (videoQuestion) videoQuestion.textContent = question.question || '';
-        if (videoAnswer) {
-          videoAnswer.textContent = question.answer || '';
-          videoAnswer.classList.toggle('hidden', !visible.answer);
+        const hasMainVideo = !!roundData?.video;
+        const hasAnswerVideo = !!roundData?.answerVideo;
+
+        // Manage main video player visibility
+        // We show it for the question (if exists) OR for the answer (if answer has video)
+        const mainVideoPlayer = document.querySelector('#tv-video-content .video-player');
+        if (mainVideoPlayer) {
+          const showPlayer = (visible.question && hasMainVideo) || (visible.answer && hasAnswerVideo);
+          mainVideoPlayer.classList.toggle('hidden', !showPlayer);
         }
 
-        // Update question media (use roundData, not blob URLs)
-        this.updateMediaContainer(videoQuestionMedia, undefined, undefined, undefined, visible.question, false);
+        if (videoQuestion) {
+          const text = question.question || '';
+          videoQuestion.textContent = text;
+          videoQuestion.classList.toggle('hidden', !visible.question || !text.trim());
+        }
+        if (videoAnswer) {
+          const text = question.answer || '';
+          videoAnswer.textContent = text;
+          videoAnswer.classList.toggle('hidden', !visible.answer || !text.trim());
+        }
 
-        // Update answer media (hidden until answer is revealed, use roundData)
-        this.updateMediaContainer(videoAnswerMedia, undefined, undefined, undefined, visible.answer, true);
+        // Update question media (suppress if main video is used)
+        this.updateMediaContainer(videoQuestionMedia, undefined, undefined, undefined, visible.question && !hasMainVideo, false);
+
+        // Update answer media (suppress if answer video is used in main player)
+        this.updateMediaContainer(videoAnswerMedia, undefined, undefined, undefined, visible.answer && !hasAnswerVideo, true);
 
         [videoQuestion, videoAnswer].forEach((el) => {
           if (el && el.textContent && el.textContent.length > 100) {
@@ -438,25 +779,67 @@ export class TVScreen extends BaseUI {
         const textQuestionMedia = document.getElementById('tv-text-question-media');
         const textAnswerMedia = document.getElementById('tv-text-answer-media');
 
-        if (textQuestion) textQuestion.textContent = question.question || '';
+        if (textQuestion) {
+          const text = question.question || '';
+          textQuestion.textContent = text;
+          textQuestion.classList.toggle('hidden', !visible.question || !text.trim());
+        }
         if (textAnswer) {
-          textAnswer.textContent = question.answer || '';
-          textAnswer.classList.toggle('hidden', !visible.answer);
+          const text = question.answer || '';
+          textAnswer.textContent = text;
+          textAnswer.classList.toggle('hidden', !visible.answer || !text.trim());
         }
 
-        // Update question media (use roundData, not blob URLs)
         this.updateMediaContainer(textQuestionMedia, undefined, undefined, undefined, visible.question, false);
-
-        // Update answer media (hidden until answer is revealed, use roundData)
         this.updateMediaContainer(textAnswerMedia, undefined, undefined, undefined, visible.answer, true);
 
-        [textQuestion, textAnswer].forEach((el) => {
-          if (el && el.textContent && el.textContent.length > 100) {
-            el.classList.add('long-text');
-          } else if (el) {
-            el.classList.remove('long-text');
+        // Ensure options are hidden in plain text mode (cleaning up from potential previous 'select' mode)
+        const textSelectCleanup = document.getElementById('tv-select-options');
+        if (textSelectCleanup) {
+          textSelectCleanup.classList.add('hidden');
+          textSelectCleanup.innerHTML = '';
+        }
+        break;
+
+      case 'select':
+        const selectQuestion = document.getElementById('tv-text-question');
+        const selectAnswer = document.getElementById('tv-text-answer');
+        const selectOptions = document.getElementById('tv-select-options');
+        const selectQuestionMedia = document.getElementById('tv-text-question-media');
+        const selectAnswerMedia = document.getElementById('tv-text-answer-media');
+
+        if (selectQuestion) {
+          const text = question.question || '';
+          selectQuestion.textContent = text;
+          selectQuestion.classList.toggle('hidden', !visible.question || !text.trim());
+        }
+
+        if (selectOptions) {
+          selectOptions.innerHTML = '';
+          if (roundData?.answerOptions && Array.isArray(roundData.answerOptions)) {
+            const grid = document.createElement('div');
+            grid.className = 'tv-options-grid';
+            roundData.answerOptions.forEach((opt: string) => {
+              const el = document.createElement('div');
+              el.className = 'tv-option';
+              el.textContent = opt;
+              grid.appendChild(el);
+            });
+            selectOptions.appendChild(grid);
+            selectOptions.classList.toggle('hidden', !visible.question);
+          } else {
+            selectOptions.classList.add('hidden');
           }
-        });
+        }
+
+        if (selectAnswer) {
+          const text = question.answer || '';
+          selectAnswer.textContent = text;
+          selectAnswer.classList.toggle('hidden', !visible.answer || !text.trim());
+        }
+
+        this.updateMediaContainer(selectQuestionMedia, undefined, undefined, undefined, visible.question, false);
+        this.updateMediaContainer(selectAnswerMedia, undefined, undefined, undefined, visible.answer, true);
         break;
     }
   }
@@ -578,19 +961,20 @@ export class TVScreen extends BaseUI {
     const roundData = (window as any).roundData || this.roundData;
 
     // Determine which roundData fields to use based on container type
-    const roundImage = isAnswerContainer ? roundData?.answerImage : roundData?.questionImage;
-    const roundVideo = isAnswerContainer ? roundData?.answerVideo : roundData?.questionVideo;
-    const roundAudio = isAnswerContainer ? roundData?.answerAudio : roundData?.questionAudio;
+    // Fallback to roundData.audio/video if specific question/answer fields are missing
+    let roundImage = isAnswerContainer ? roundData?.answerImage : roundData?.questionImage;
+    let roundVideo = isAnswerContainer ? roundData?.answerVideo : roundData?.questionVideo;
+    let roundAudio = (isAnswerContainer ? roundData?.answerAudio : roundData?.questionAudio) || roundData?.audio;
+
+    // If this is the main video content area, priority is different
+    if (container.id.includes('video')) {
+      roundVideo = roundData?.video || roundVideo;
+    }
 
     // Priority: image > video > audio
-    // Use only roundData (base64 data URLs), not blob URLs (they don't work across windows)
-    // fileToBase64 already returns data URLs via readAsDataURL
     if (roundImage) {
       const img = document.createElement('img');
-      img.src = roundImage; // Already a data URL from fileToBase64
-      img.onerror = () => {
-        console.error('TVScreen: Failed to load image media');
-      };
+      img.src = roundImage;
       img.style.maxWidth = '100%';
       img.style.maxHeight = '60vh';
       img.style.objectFit = 'contain';
@@ -599,26 +983,23 @@ export class TVScreen extends BaseUI {
       container.appendChild(img);
     } else if (roundVideo) {
       const video = document.createElement('video');
-      video.src = roundVideo; // Already a data URL from fileToBase64
-      video.onerror = () => {
-        console.error('TVScreen: Failed to load video media');
-      };
+      video.id = container.id === 'tv-video-question-media' ? 'tv-round-video' : '';
+      video.src = roundVideo;
       video.controls = true;
       video.style.maxWidth = '100%';
       video.style.maxHeight = '60vh';
       video.style.margin = '10px auto';
       video.style.display = 'block';
+
       container.appendChild(video);
     } else if (roundAudio) {
       const audio = document.createElement('audio');
-      audio.src = roundAudio; // Already a data URL from fileToBase64
-      audio.onerror = () => {
-        console.error('TVScreen: Failed to load audio media');
-      };
-      audio.controls = true;
-      audio.style.width = '100%';
-      audio.style.margin = '10px auto';
-      audio.style.display = 'block';
+      // Use a recognizable ID for the current round audio
+      audio.id = 'tv-round-audio';
+      audio.src = roundAudio;
+      audio.controls = false;
+      audio.style.display = 'none';
+
       container.appendChild(audio);
     }
   }
@@ -651,10 +1032,15 @@ export class TVScreen extends BaseUI {
 
     // Use roundData from window (set by LOAD_ROUND_DATA message)
     const roundData = (window as any).roundData || this.roundData;
-    if (roundData?.video) {
+    const visible = state.visible || {};
+
+    // Determine correct video source: answer video if answer is visible, otherwise question video
+    const videoSrc = (visible.answer && roundData?.answerVideo) ? roundData.answerVideo : roundData?.video;
+
+    if (videoSrc) {
       // Only update src if it's different to avoid reloading
-      if (tvVideo.src !== roundData.video) {
-        tvVideo.src = roundData.video;
+      if (tvVideo.src !== videoSrc) {
+        tvVideo.src = videoSrc;
       }
       if (state.isVideoPlaying) {
         tvVideo.play().catch((error) => {

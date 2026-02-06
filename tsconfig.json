@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
@@ -13,18 +17,37 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": "./src",
     "paths": {
-      "@/*": ["./*"],
-      "@types/*": ["./types/*"],
-      "@services/*": ["./services/*"],
-      "@ui/*": ["./ui/*"],
-      "@media/*": ["./media/*"],
-      "@utils/*": ["./utils/*"],
-      "@state/*": ["./state/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@types/*": [
+        "./types/*"
+      ],
+      "@services/*": [
+        "./services/*"
+      ],
+      "@ui/*": [
+        "./ui/*"
+      ],
+      "@media/*": [
+        "./media/*"
+      ],
+      "@utils/*": [
+        "./utils/*"
+      ],
+      "@state/*": [
+        "./state/*"
+      ]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*",
+    "tests/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

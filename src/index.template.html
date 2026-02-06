@@ -50,9 +50,7 @@
         <div class="sidebar">
             <h2 data-i18n="gm_panel">🎮 Панель GM</h2>
             <div>
-                <label for="folder-input" class="btn btn-sec"
-                    style="width:100%; display:block; text-align:center; cursor:pointer; margin-bottom:5px;"
-                    data-i18n="choose_files">
+                <label for="folder-input" class="btn btn-sec" data-i18n="choose_files">
                     Выбрать файлы
                 </label>
                 <input type="file" id="folder-input" webkitdirectory directory multiple
@@ -60,11 +58,26 @@
                 <div id="load-status" style="font-size:12px; color:#888; margin-top:5px;" data-i18n="file_not_selected">
                     Файл не выбран</div>
             </div>
+
+            <div id="game-info-panel" class="hidden"
+                style="background:rgba(255,255,255,0.05); padding:10px; border-radius:4px; margin-top:10px; margin-bottom:10px;">
+                <div style="font-size:0.8em; color:#aaa; margin-bottom: 5px;" data-i18n="current_package">Текущий пакет:
+                </div>
+                <div id="game-package-name"
+                    style="word-break:break-all; font-weight:bold; color:var(--accent); font-size: 0.9em;"></div>
+            </div>
+            <div style="margin-top: 10px;">
+                <label for="siq-input" class="btn btn-main" data-i18n="import_siq">
+                    Импорт .siq
+                </label>
+                <input type="file" id="siq-input" accept=".siq" style="width:100%; display:none;">
+                <div id="siq-load-status" style="font-size:12px; color:#888; margin-top:5px;"></div>
+            </div>
             <hr style="width:100%; border:0; border-top:1px solid #444;">
 
             <div id="round-control-panel" class="hidden">
                 <h3 data-i18n="round_management">🎯 Управление раундами</h3>
-                <div id="round-selector" style="display: flex; gap: 5px; margin-bottom: 10px;"></div>
+                <div id="round-selector"></div>
             </div>
 
             <div>
@@ -88,6 +101,11 @@
                         <span>❄️ Снег: ВКЛ</span>
                     </button>
                 </div>
+
+                <button class="btn btn-ghost" id="open-results-btn" data-i18n="show_results"
+                    style="width:100%; margin: 10px 0;">
+                    🏆 Показать итоги
+                </button>
 
                 <button class="btn btn-danger" style="width:100%" id="reset-btn" data-i18n="reset_game">🛑 Сброс
                     игры</button>
@@ -144,6 +162,12 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div id="admin-results-view" class="hidden" style="text-align:center; padding:50px;">
+                <h2 data-i18n="results_on_screen">🏆 Итоги на экране</h2>
+                <p data-i18n="click_round_to_return" style="margin-bottom: 20px; color: #888;">Нажмите на раунд слева, чтобы вернуться к игре.</p>
+                <button class="btn btn-main btn-lg" id="back-to-game-btn" data-i18n="back_to_game">🔙 Вернуться к вопросам</button>
             </div>
 
             <div id="round-control" class="hidden">
@@ -255,13 +279,14 @@
         </div>
 
         <div id="tv-grid" class="tv-grid-container hidden"></div>
+        <div id="tv-final-round" class="tv-final-round-container hidden"></div>
+        <div id="tv-results-container" class="hidden"></div>
 
         <div id="tv-round" class="tv-round-container hidden">
             <div id="tv-normal-question" class="hidden">
                 <div class="content-wrapper">
                     <div id="tv-round-info" class="round-info">
                         <span id="tv-round-category"></span> — <span id="tv-round-score"></span> баллов
-                        <span id="tv-round-type" style="font-size:0.8em; margin-left:10px;"></span>
                     </div>
 
                     <div id="tv-mashup-content" class="hidden">
@@ -312,6 +337,7 @@
                     <div id="tv-text-content" class="hidden">
                         <div id="tv-text-question" class="tv-question-text"></div>
                         <div id="tv-text-question-media" class="tv-question-media"></div>
+                        <div id="tv-select-options" class="hidden"></div>
                         <div id="tv-text-answer" class="tv-answer-text hidden"></div>
                         <div id="tv-text-answer-media" class="tv-answer-media hidden"></div>
                     </div>

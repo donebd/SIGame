@@ -4,11 +4,16 @@
   </p>
 </div>
 
-# Web selfhosted SIGame for offline parties
+# Web selfhosted SIGame Engine for offline parties
+
+**Full-featured multi-format game engine** for hosting local quiz games in the "SIGame" format. 
+
+### 🚀 Major v2.0 Update: .siq Support!
+Now supporting both **manual folder structures** and standard **.siq packages**. Just drag and drop your existing packs and play!
 
 **Full vibe-coded project** for hosting local quiz games in the "SIGame" format (similar to "What? Where? When?").
 
-This project was created **for fun** to host your own game in offline mode, where participants interact with the host directly, without using mobile devices or apps. Participants only need to be present in the room, and the host needs two screens: one with the admin panel for managing the game, and the second for displaying questions and information to players.
+Project is a complete **game engine** for hosting your own game in offline mode, where participants interact with the host directly, without using mobile devices or apps. Participants only need to be present in the room, and the host needs two screens: one with the admin panel for managing the game, and the second for displaying questions and information to players.
 
 ## How to Play
 
@@ -27,7 +32,7 @@ This project was created **for fun** to host your own game in offline mode, wher
    - This window should be displayed on a second screen/projector so players can see the questions
 
 4. **Set up the game:**
-   - Load a question pack folder (see folder structure below)
+   - Load a question pack (you can use a **ready .siq package** or a folder with questions)
    - Add players/teams through the admin panel
    - Start the game by selecting questions from the grid
 
@@ -78,11 +83,16 @@ All synchronization between the admin panel and player screen happens automatica
 
 - 🎮 Admin panel for game management
 - 📺 Player screen with real-time synchronization
-- 🎵 Support for various question types (mashup, audio, video, text)
-- 🖼️ Support for media in questions and answers (images, video, audio)
-- 💾 Automatic game state saving
+- 🎵### Supported formats
+- **Text**: Classic text questions.
+- **Image**: Visual questions.
+- **Audio**: Music and sound questions (mp3, wav).
+- **Video**: Video clips (mp4, webm).
+- **Mashup**: Questions with hidden music/text revealed on click.
+- **Select**: Multiple-choice questions with answer options.
 - 🔄 Synchronization between admin panel and player screen
 - ❄️ Holiday effects (snow, garlands)
+- 🎉 Animated Results Screen
 - 🎉 Confetti animations
 - 🎯 Special cards (cat in a bag, bet, auction)
 

@@ -31,6 +31,7 @@ export function getTypeName(type: QuestionType): string {
     audio: t('question_type_audio'),
     video: t('question_type_video'),
     text: t('question_type_text'),
+    select: t('question_type_select'),
   };
   return typeNameMap[type] || QUESTION_TYPE_NAMES[type] || 'Неизвестно';
 }
@@ -55,7 +56,22 @@ export function getSpecialTypeName(specialType: string | null | undefined): stri
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload = () => {
+      let result = reader.result as string;
+
+      // Fix for application/octet-stream: browsers often won't play such base64 videos/audio
+      if (result.startsWith('data:application/octet-stream;base64,')) {
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.mp4')) result = result.replace('application/octet-stream', 'video/mp4');
+        else if (name.endsWith('.webm')) result = result.replace('application/octet-stream', 'video/webm');
+        else if (name.endsWith('.mp3')) result = result.replace('application/octet-stream', 'audio/mpeg');
+        else if (name.endsWith('.wav')) result = result.replace('application/octet-stream', 'audio/wav');
+        else if (name.endsWith('.png')) result = result.replace('application/octet-stream', 'image/png');
+        else if (name.endsWith('.jpg') || name.endsWith('.jpeg')) result = result.replace('application/octet-stream', 'image/jpeg');
+      }
+
+      resolve(result);
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });

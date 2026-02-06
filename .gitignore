@@ -7,3 +7,17 @@ dist/
 *.swp
 *.swo
 *~
+
+# Testing
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Debug/Temp files
+test_output*.txt
+fullpack_error*.txt
+test_fullpack_output.txt
+
+# OS files
+Thumbs.db
+desktop.ini
