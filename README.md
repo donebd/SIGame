@@ -20,28 +20,68 @@ Project is a complete **game engine** for hosting your own game in offline mode,
 ### Quick Start
 
 1. **Download the game:**
-   - Go to [Releases](https://github.com/donebd/SIGame/releases) and download the latest `SIGame.html` file
-   - Or build it yourself (see [Building](#building) section)
+   - Go to [Releases](https://github.com/donebd/SIGame/releases) and download the latest `SIGame-vX.X.X.zip`
+   - The ZIP contains two self-contained HTML files — no installation needed
 
 2. **Open the game:**
-   - Double-click `SIGame.html` to open it in your browser - this will be the admin panel for the host
+   - Double-click `SIGame.html` to open it in your browser — this is the **admin panel** (host)
 
 3. **Open the TV screen for players:**
-   - Click the "Open TV Screen" button in the admin panel
+   - Click the **"Open TV Screen"** button in the admin panel
    - Or open `SIGame.html?screen=game` in a new browser window/tab
-   - This window should be displayed on a second screen/projector so players can see the questions
+   - Display this window on a second screen/projector so players can see questions
 
 4. **Set up the game:**
-   - Load a question pack (you can use a **ready .siq package** or a folder with questions)
+   - Load a question pack (`.siq` package or a folder with questions)
    - Add players/teams through the admin panel
    - Start the game by selecting questions from the grid
 
 ### Recommended Setup
 
-- **Screen 1 (Admin Panel):** Host's laptop/computer - here the host manages the game
-- **Screen 2 (TV Screen):** Projector/large monitor for players - here players see questions and scores
+- **Screen 1 (Admin Panel):** Host's laptop — here the host manages the game
+- **Screen 2 (TV Screen):** Projector/large monitor — players see questions and scores
 
-**Important:** Both screens should be open in the same browser (can be on different devices on the same network, but BroadcastChannel API only works within the same browser/profile). For cross-device operation, additional synchronization setup will be required.
+---
+
+## 🎮 Remote Control (Mobile Controller)
+
+Lets the game host sit with the players at the table and control the game from their smartphone — no need to be at the PC. The game itself (admin panel + TV screen) still runs entirely on the host's computer. No app install required on the phone.
+
+### Requirements
+
+- All devices on the **same Wi-Fi network**
+- [Node.js](https://nodejs.org) installed on the host machine (one-time install)
+- PeerJS signaling server — use the included scripts (see Setup below) or run manually:
+  ```bash
+  npm install -g peer
+  peerjs --port 9001
+  ```
+
+### Setup
+
+1. **Start the PeerJS server** — the release ZIP includes ready-to-use scripts:
+   - **Windows**: double-click `start-peer-server.bat`
+   - **macOS / Linux**: run `bash start-peer-server.sh` in a terminal  
+   *(Both scripts auto-install `peer` via npm on first run)*
+2. Open `SIGame.html` → click **🎮 Remote Control** in the admin panel
+3. A **QR code** appears — scan it with your phone (or copy the URL)
+4. `mobile.html` opens in your phone's browser — you're connected!
+
+> **Keep the server script running** while you play. Close it when done.
+
+### What you can control from your phone
+
+| Action | Available |
+|--------|-----------|
+| Browse and select questions | ✅ |
+| Show question / reveal answer | ✅ |
+| Award points (full / half / −full) | ✅ |
+| Switch rounds, ban Final themes | ✅ |
+| Add / remove / rename players | ✅ |
+| Edit scores manually | ✅ |
+| Upload `.siq` pack from phone | ✅ |
+
+
 
 ## Screenshots
 
@@ -101,23 +141,31 @@ All synchronization between the admin panel and player screen happens automatica
 ```
 src/
 ├── types/           # TypeScript types and interfaces
-├── state/           # State management
+├── state/           # State management (GameStateManager)
+├── config.ts        # Shared config (PeerJS port/host)
 ├── services/        # Business logic services
+│   ├── GameController.ts  # Central command dispatcher (Command Pattern)
+│   ├── SyncService.ts     # Sync manager (multi-provider)
+│   ├── sync/
+│   │   ├── ISyncProvider.ts          # Provider interface
+│   │   ├── BroadcastChannelProvider.ts  # Default (same browser)
+│   │   └── PeerSyncProvider.ts       # WebRTC P2P (cross-device)
 │   ├── StorageService.ts
-│   ├── SyncService.ts
-│   └── FileService.ts
+│   ├── FileService.ts
+│   └── SiqService.ts
 ├── ui/              # UI components
 │   ├── BaseUI.ts
 │   ├── AdminUI.ts
-│   └── TVScreen.ts
+│   ├── TVScreen.ts
+│   └── FinalRoundView.ts
 ├── media/           # Media controllers
 │   ├── AudioController.ts
 │   └── VideoController.ts
 ├── utils/           # Utility functions
 │   ├── helpers.ts
-│   ├── fileDetector.ts
 │   └── i18n.ts
-├── app.ts           # Main application entry point
+├── app.ts           # Main entry point (Admin + TV screen)
+├── mobile.ts        # Mobile remote control entry point
 └── styles.css       # Application styles
 ```
 

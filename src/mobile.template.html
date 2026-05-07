@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SIGame Remote</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            touch-action: manipulation;
+        }
+
+        .header {
+            background-color: #1f1f1f;
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: red;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .status-connected {
+            background-color: #4CAF50;
+        }
+
+        .status-connecting {
+            background-color: #FFC107;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .info-panel {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .btn {
+            border: none;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-main {
+            background-color: #bb86fc;
+            color: black;
+            grid-column: span 2;
+        }
+
+        .btn-sec {
+            background-color: #03dac6;
+            color: black;
+        }
+
+        .btn-danger {
+            background-color: #cf6679;
+            color: black;
+        }
+
+        .btn-ghost {
+            background-color: transparent;
+            border: 1px solid #555;
+            color: #ccc;
+        }
+
+        .icon {
+            font-size: 20px;
+        }
+
+        #connection-error {
+            background: #cf6679;
+            color: black;
+            padding: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        /* View Panels */
+        .view-panel {
+            width: 100%;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Round Selector */
+        .round-tabs {
+            display: flex;
+            overflow-x: auto;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+
+        .round-tab {
+            background: #333;
+            padding: 5px 15px;
+            border-radius: 15px;
+            white-space: nowrap;
+            cursor: pointer;
+            border: 1px solid #444;
+        }
+
+        .round-tab.active {
+            background: #bb86fc;
+            color: #000;
+        }
+
+        /* Questions Grid */
+        .questions-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .cat-block {
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .cat-title {
+            font-weight: bold;
+            color: #bb86fc;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .q-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .q-card {
+            background: #444;
+            padding: 10px;
+            min-width: 40px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            flex: 1;
+        }
+
+        .q-card.played {
+            background: #333;
+            color: #666;
+            text-decoration: line-through;
+            border: 1px solid #444;
+        }
+
+        /* Question View */
+        .question-text {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        .question-type-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            background: #333;
+            border-radius: 4px;
+            font-size: 0.8em;
+            color: #aaa;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            border: 1px solid #555;
+        }
+
+        .answer-text {
+            color: #03dac6;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            border: 1px solid #03dac6;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* Players */
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .player-card {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .player-card.selected {
+            border-color: #bb86fc;
+            background: #444;
+        }
+
+        .player-score {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .player-name {
+            font-size: 0.8em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Loader */
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loader {
+            border: 5px solid #333;
+            border-top: 5px solid #bb86fc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Tabs */
+        .tab-bar {
+            background-color: #1f1f1f;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            border-top: 1px solid #333;
+            flex-shrink: 0;
+            /* Prevent shrinking */
+        }
+
+        .tab-item {
+            color: #888;
+            text-align: center;
+            flex: 1;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .tab-item.active {
+            color: #bb86fc;
+        }
+
+        .tab-icon {
+            font-size: 1.2em;
+        }
+
+        /* Player Management */
+        .player-list-item {
+            background: #333;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .player-input {
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        /* Setup */
+        .file-upload-container {
+            border: 2px dashed #444;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .file-upload-container:hover {
+            border-color: #bb86fc;
+            background: #222;
+        }
+
+        /* Upload Progress Bar */
+        .progress-wrap {
+            background: #333;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 12px;
+            margin-top: 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #bb86fc, #03dac6);
+            border-radius: 8px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Tabs */
+        .tab-bar {
+            background-color: #1f1f1f;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            border-top: 1px solid #333;
+            flex-shrink: 0;
+        }
+
+        .tab-item {
+            color: #888;
+            text-align: center;
+            flex: 1;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .tab-item.active {
+            color: #bb86fc;
+        }
+
+        .tab-icon {
+            font-size: 1.2em;
+        }
+
+        /* Player Management */
+        .player-list-item {
+            background: #333;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .player-input {
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        /* Setup */
+        .file-upload-container {
+            border: 2px dashed #444;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .file-upload-container:hover {
+            border-color: #bb86fc;
+            background: #222;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div style="font-weight: bold;">SIGame Remote</div>
+        <div id="status-indicator"><span class="status-dot"></span> <span id="status-text">Disconnect</span></div>
+    </div>
+
+    <div id="connection-error">Connection lost. Reconnecting...</div>
+
+    <div id="loader" class="loader-overlay hidden">
+        <div class="loader"></div>
+    </div>
+
+    <div class="main-content">
+        <div class="info-panel">
+            <div id="current-round" style="color: #888; font-size: 0.9em; margin-bottom: 5px;">Round 1</div>
+        </div>
+
+        <!-- Players Management View -->
+        <div id="players-view" class="view-panel hidden">
+            <h3 style="text-align: center; color: #bb86fc;">Manage Players</h3>
+
+            <div style="background: #2a2a2a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <input type="text" id="new-player-name" class="player-input" placeholder="New player name...">
+                <button id="btn-add-player" class="btn btn-main" style="width: 100%;">Add Player</button>
+            </div>
+
+            <div id="manage-players-list">
+                <!-- Player items injected here -->
+            </div>
+        </div>
+
+        <!-- Setup View -->
+        <div id="setup-view" class="view-panel hidden">
+            <h3 style="text-align: center; color: #bb86fc;">Game Setup</h3>
+
+            <div class="info-panel" style="margin-bottom: 20px;">
+                <div id="setup-status">Select a .siq package to upload</div>
+            </div>
+
+            <label for="siq-upload" class="file-upload-container" style="display: block;">
+                <div style="font-size: 2em; margin-bottom: 10px;">📦</div>
+                <div>Tap to select file</div>
+                <div style="font-size: 0.8em; color: #888; margin-top: 5px;">.siq files only</div>
+                <input type="file" id="siq-upload" accept=".siq" style="display: none;">
+            </label>
+
+            <div id="upload-progress-wrap" class="progress-wrap hidden">
+                <div id="upload-progress-bar" class="progress-bar"></div>
+            </div>
+
+            <button id="btn-reset-game" class="btn btn-danger" style="width: 100%; margin-top: 20px;">
+                Reset Game State
+            </button>
+        </div>
+
+
+        <!-- Grid View -->
+        <div id="grid-view" class="view-panel">
+            <div id="round-selector" class="round-tabs"></div>
+            <div id="questions-grid" class="questions-grid"></div>
+        </div>
+
+        <!-- Special Question View -->
+        <div id="special-view" class="view-panel hidden" style="text-align: center;">
+            <div id="special-icon" style="font-size: 5em; margin: 20px 0;"></div>
+            <div id="special-title" style="font-size: 2em; color: #bb86fc; margin-bottom: 20px;"></div>
+            <div id="special-description"
+                style="background: #333; padding: 15px; border-radius: 8px; margin-bottom: 30px; white-space: pre-wrap;">
+            </div>
+
+            <button class="btn btn-main" id="btn-open-special" style="width: 100%; font-size: 1.2em;">
+                <span class="icon">▶️</span>
+                Open Question
+            </button>
+        </div>
+
+        <!-- Question View -->
+        <div id="question-view" class="view-panel hidden">
+            <div id="question-type" class="question-type-badge"></div>
+            <div id="current-question-text" class="question-text">No active question</div>
+
+            <div id="answer-media" class="media-container hidden" style="margin-bottom: 15px; text-align: center;">
+                <!-- Media content will be injected here -->
+            </div>
+
+            <div id="current-answer-text" class="answer-text hidden"></div>
+
+            <div id="players-list" class="players-grid">
+                <!-- Players will be injected here -->
+            </div>
+            <div id="selected-player-name" style="text-align: center; color: #bb86fc; height: 20px;"></div>
+
+            <div class="controls-grid">
+                <button class="btn btn-main" id="btn-show-answer">
+                    <span class="icon">🎯</span>
+                    Show Answer
+                </button>
+                <button class="btn btn-sec" id="btn-show-question">
+                    <span class="icon">❓</span>
+                    Show Text
+                </button>
+
+                <button class="btn btn-ghost" id="btn-media-toggle">
+                    <span class="icon">⏯️</span>
+                    Play/Pause
+                </button>
+
+                <button class="btn btn-ghost" id="btn-video-fullscreen">
+                    <span class="icon">⛶</span>
+                    Fullscreen
+                </button>
+
+                <button class="btn btn-ghost" id="btn-back-grid">
+                    <span class="icon">⬅️</span>
+                    Back to Grid
+                </button>
+
+                <button class="btn btn-sec" id="btn-award-full">
+                    <span class="icon">✅</span>
+                    Correct
+                </button>
+                <button class="btn btn-sec" id="btn-award-half">
+                    <span class="icon">🔽</span>
+                    Half
+                </button>
+                <button class="btn btn-danger" id="btn-award-minus">
+                    <span class="icon">❌</span>
+                    Wrong
+                </button>
+            </div>
+        </div>
+
+
+        <div class="tab-bar">
+            <div class="tab-item active" data-tab="grid">
+                <span class="tab-icon">🎮</span>
+                <span>Game</span>
+            </div>
+            <div class="tab-item" data-tab="players">
+                <span class="tab-icon">👥</span>
+                <span>Players</span>
+            </div>
+            <div class="tab-item" data-tab="setup">
+                <span class="tab-icon">⚙️</span>
+                <span>Setup</span>
+            </div>
+        </div>
+</body>
+
+</html>

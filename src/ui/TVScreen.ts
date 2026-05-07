@@ -4,7 +4,7 @@
  */
 
 import { BaseUI } from './BaseUI';
-import { GameState, Question, Player } from '../types/index';
+import { GameState, Question, Player, RoundData } from '../types/index';
 import { getTypeIcon, getTypeName, getSpecialTypeName, scaleTextToFit } from '../utils/helpers';
 import { t } from '../utils/i18n';
 
@@ -46,7 +46,7 @@ export class TVScreen extends BaseUI {
       } else {
         this.renderGrid(state, grid, round, normalQuestion, specialPreview);
       }
-    } else if (state.mode === 'ROUND') {
+    } else if (state.mode === 'QUESTION') {
       this.renderRound(state, grid, round, normalQuestion, specialPreview);
     } else if (state.mode === 'RESULTS') {
       this.renderResults(state, grid, round, normalQuestion, specialPreview);
@@ -453,6 +453,26 @@ export class TVScreen extends BaseUI {
   }
 
   /**
+   * Play main video
+   */
+  public playVideo(): void {
+    const video = document.getElementById('tv-video-player') as HTMLVideoElement;
+    if (video) {
+      video.play().catch(e => console.error('TV Play Error:', e));
+    }
+  }
+
+  /**
+   * Pause main video
+   */
+  public pauseVideo(): void {
+    const video = document.getElementById('tv-video-player') as HTMLVideoElement;
+    if (video) {
+      video.pause();
+    }
+  }
+
+  /**
    * Render grid mode
    */
   private renderGrid(
@@ -718,8 +738,9 @@ export class TVScreen extends BaseUI {
         // Update question media (use roundData, not blob URLs)
         this.updateMediaContainer(audioQuestionMedia, undefined, undefined, undefined, visible.question, false);
 
-        // Update answer media (hidden until answer is revealed, use roundData)
-        this.updateMediaContainer(audioAnswerMedia, undefined, undefined, undefined, visible.answer, true);
+        // Update answer media — if answerVideo exists, use main player; otherwise use media container
+        const audioHandledByVideo = this.showAnswerVideoInMainPlayer(state);
+        this.updateMediaContainer(audioAnswerMedia, undefined, undefined, undefined, visible.answer && !audioHandledByVideo, true);
 
         [audioQuestion, audioAnswer].forEach((el) => {
           if (el && el.textContent && el.textContent.length > 100) {
@@ -740,10 +761,26 @@ export class TVScreen extends BaseUI {
         const hasAnswerVideo = !!roundData?.answerVideo;
 
         // Manage main video player visibility
-        // We show it for the question (if exists) OR for the answer (if answer has video)
+        // Main player handles question video, and answer video. 
+        // If we are showing the answer, and there is NO answer video, we should HIDE the main player 
+        // ONLY IF there is another media (image or audio) that needs the space.
+        // If it's just text, the video should keep playing in the background.
         const mainVideoPlayer = document.querySelector('#tv-video-content .video-player');
         if (mainVideoPlayer) {
-          const showPlayer = (visible.question && hasMainVideo) || (visible.answer && hasAnswerVideo);
+          const hasAnswerImage = !!roundData?.answerImage;
+          const hasAnswerAudio = !!roundData?.answerAudio || !!roundData?.audio;
+
+          let showPlayer = false;
+          if (visible.question && hasMainVideo) {
+            showPlayer = true;
+          } else if (visible.answer) {
+            if (hasAnswerVideo) {
+              showPlayer = true;
+            } else if (!hasAnswerImage && !hasAnswerAudio && hasMainVideo) {
+              // Text only answer to a video question - keep playing
+              showPlayer = true;
+            }
+          }
           mainVideoPlayer.classList.toggle('hidden', !showPlayer);
         }
 
@@ -761,7 +798,7 @@ export class TVScreen extends BaseUI {
         // Update question media (suppress if main video is used)
         this.updateMediaContainer(videoQuestionMedia, undefined, undefined, undefined, visible.question && !hasMainVideo, false);
 
-        // Update answer media (suppress if answer video is used in main player)
+        // Update answer media (suppress if answer video is handled by main player)
         this.updateMediaContainer(videoAnswerMedia, undefined, undefined, undefined, visible.answer && !hasAnswerVideo, true);
 
         [videoQuestion, videoAnswer].forEach((el) => {
@@ -791,7 +828,10 @@ export class TVScreen extends BaseUI {
         }
 
         this.updateMediaContainer(textQuestionMedia, undefined, undefined, undefined, visible.question, false);
-        this.updateMediaContainer(textAnswerMedia, undefined, undefined, undefined, visible.answer, true);
+
+        // Update answer media — if answerVideo exists, use main player; otherwise use media container
+        const textHandledByVideo = this.showAnswerVideoInMainPlayer(state);
+        this.updateMediaContainer(textAnswerMedia, undefined, undefined, undefined, visible.answer && !textHandledByVideo, true);
 
         // Ensure options are hidden in plain text mode (cleaning up from potential previous 'select' mode)
         const textSelectCleanup = document.getElementById('tv-select-options');
@@ -839,7 +879,10 @@ export class TVScreen extends BaseUI {
         }
 
         this.updateMediaContainer(selectQuestionMedia, undefined, undefined, undefined, visible.question, false);
-        this.updateMediaContainer(selectAnswerMedia, undefined, undefined, undefined, visible.answer, true);
+
+        // Update answer media — if answerVideo exists, use main player; otherwise use media container
+        const selectHandledByVideo = this.showAnswerVideoInMainPlayer(state);
+        this.updateMediaContainer(selectAnswerMedia, undefined, undefined, undefined, visible.answer && !selectHandledByVideo, true);
         break;
     }
   }
@@ -966,8 +1009,8 @@ export class TVScreen extends BaseUI {
     let roundVideo = isAnswerContainer ? roundData?.answerVideo : roundData?.questionVideo;
     let roundAudio = (isAnswerContainer ? roundData?.answerAudio : roundData?.questionAudio) || roundData?.audio;
 
-    // If this is the main video content area, priority is different
-    if (container.id.includes('video')) {
+    // If this is the main video QUESTION content area, fallback to `roundData.video`
+    if (!isAnswerContainer && container.id === 'tv-video-question-media') {
       roundVideo = roundData?.video || roundVideo;
     }
 
@@ -1050,6 +1093,55 @@ export class TVScreen extends BaseUI {
         tvVideo.pause();
       }
     }
+  }
+
+  /**
+   * Load answerVideo into the main #tv-video-player and show the video container.
+   * Used for question types (text/audio/select) that can have a video attached to the answer.
+   * Returns true if answerVideo was shown, false otherwise.
+   */
+  private showAnswerVideoInMainPlayer(state: GameState): boolean {
+    const roundData = (window as any).roundData || this.roundData;
+    const visible = state.visible || {};
+    if (!visible.answer || !roundData?.answerVideo) return false;
+
+    const tvVideo = document.getElementById('tv-video-player') as HTMLVideoElement;
+    if (!tvVideo) return false;
+
+    if (tvVideo.src !== roundData.answerVideo) {
+      tvVideo.src = roundData.answerVideo;
+    }
+
+    // Show the video container (normally only visible for 'video' type questions)
+    const videoContent = document.getElementById('tv-video-content');
+    if (videoContent) videoContent.classList.remove('hidden');
+
+    // Hide text/media elements around the player ONLY if we are 'hijacking' this container
+    // for a non-video question. If it IS a video question, we want to keep its answer text visible.
+    const videoQuestionEl = document.getElementById('tv-video-question');
+    const videoQuestionMedia = document.getElementById('tv-video-question-media');
+
+    if (videoQuestionEl) videoQuestionEl.classList.add('hidden');
+    if (videoQuestionMedia) videoQuestionMedia.classList.add('hidden');
+
+    const currentQuestion = this.findCurrentQuestion(state);
+    if (currentQuestion?.type !== 'video') {
+      const videoAnswerEl = document.getElementById('tv-video-answer');
+      const videoAnswerMedia = document.getElementById('tv-video-answer-media');
+      if (videoAnswerEl) videoAnswerEl.classList.add('hidden');
+      if (videoAnswerMedia) videoAnswerMedia.classList.add('hidden');
+    }
+
+    const videoPlayer = videoContent?.querySelector('.video-player');
+    if (videoPlayer) videoPlayer.classList.remove('hidden');
+
+    if (state.isVideoPlaying) {
+      tvVideo.play().catch(err => console.error('Answer video play error:', err));
+    } else {
+      tvVideo.pause();
+    }
+
+    return true;
   }
 
   /**

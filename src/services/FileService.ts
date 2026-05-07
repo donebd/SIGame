@@ -24,6 +24,29 @@ export interface FileStructure {
 }
 
 export class FileService {
+  private fileStorage: FileStorage = {};
+
+  /**
+   * Set file storage
+   */
+  setFileStorage(storage: FileStorage): void {
+    this.fileStorage = storage;
+  }
+
+  /**
+   * Get file storage
+   */
+  getFileStorage(): FileStorage {
+    return this.fileStorage;
+  }
+
+  /**
+   * Get files for question
+   */
+  getFiles(questionId: string): FileStorage[string] | undefined {
+    return this.fileStorage[questionId];
+  }
+
   /**
    * Parse file structure from FileList
    */
@@ -139,7 +162,7 @@ export class FileService {
     const qImage = findMediaFile(files, /^questionImage\.(jpg|jpeg|png|webp)$/i);
     const qVideo = findMediaFile(files, /^questionVideo\.(mp4|webm|avi|mov)$/i);
     const qAudio = findMediaFile(files, /^questionAudio\.(mp3|wav|ogg|m4a)$/i);
-    
+
     // Find answer media files (answerImage.*, answerVideo.*, answerAudio.*)
     const aImage = findMediaFile(files, /^answerImage\.(jpg|jpeg|png|webp)$/i);
     const aVideo = findMediaFile(files, /^answerVideo\.(mp4|webm|avi|mov)$/i);

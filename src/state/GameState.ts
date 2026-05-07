@@ -16,9 +16,28 @@ import { APP_VERSION } from '../types/constants';
 
 export class GameStateManager {
   private state: GameState;
+  private listeners: ((state: GameState) => void)[] = [];
 
   constructor() {
     this.state = this.createInitialState();
+  }
+
+  /**
+   * Subscribe to state changes
+   */
+  subscribe(listener: (state: GameState) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  /**
+   * Notify listeners
+   */
+  private notifyListeners(): void {
+    const state = this.getState();
+    this.listeners.forEach((listener) => listener(state));
   }
 
   /**
@@ -37,6 +56,7 @@ export class GameStateManager {
       ...updates,
       lastUpdated: Date.now(),
     };
+    this.notifyListeners();
   }
 
   /**
@@ -49,6 +69,7 @@ export class GameStateManager {
       this.state.currentRoundName = roundNames[0];
     }
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -57,6 +78,7 @@ export class GameStateManager {
   setLoadedFolder(folderName: string | null): void {
     this.state.loadedFolder = folderName;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -65,6 +87,7 @@ export class GameStateManager {
   setPlayers(players: Player[]): void {
     this.state.players = players;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -85,6 +108,7 @@ export class GameStateManager {
 
     this.state.players.push(player);
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
     return player;
   }
 
@@ -100,6 +124,7 @@ export class GameStateManager {
     if (index !== -1) {
       this.state.players.splice(index, 1);
       this.state.lastUpdated = Date.now();
+      this.notifyListeners();
       return true;
     }
     return false;
@@ -113,6 +138,7 @@ export class GameStateManager {
     if (player) {
       player.name = name || 'Без имени';
       this.state.lastUpdated = Date.now();
+      this.notifyListeners();
     }
   }
 
@@ -124,6 +150,7 @@ export class GameStateManager {
     if (player) {
       player.score = score;
       this.state.lastUpdated = Date.now();
+      this.notifyListeners();
     }
   }
 
@@ -146,6 +173,7 @@ export class GameStateManager {
     }
 
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
     return true;
   }
 
@@ -161,6 +189,7 @@ export class GameStateManager {
       }
     }
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -169,6 +198,7 @@ export class GameStateManager {
   setMode(mode: GameMode): void {
     this.state.mode = mode;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -178,6 +208,7 @@ export class GameStateManager {
     if (this.state.roundNames.includes(roundName)) {
       this.state.currentRoundName = roundName;
       this.state.lastUpdated = Date.now();
+      this.notifyListeners();
     }
   }
 
@@ -190,6 +221,7 @@ export class GameStateManager {
       ...visible,
     };
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -198,6 +230,7 @@ export class GameStateManager {
   setPlaying(isPlaying: boolean): void {
     this.state.isPlaying = isPlaying;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -206,6 +239,7 @@ export class GameStateManager {
   setVideoPlaying(isPlaying: boolean): void {
     this.state.isVideoPlaying = isPlaying;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -214,6 +248,7 @@ export class GameStateManager {
   setSpecialMode(mode: SpecialType): void {
     this.state.specialMode = mode;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -224,6 +259,7 @@ export class GameStateManager {
     if (question) {
       question.played = played;
       this.state.lastUpdated = Date.now();
+      this.notifyListeners();
     }
   }
 
@@ -260,6 +296,7 @@ export class GameStateManager {
     if (!this.state.roundTypes) this.state.roundTypes = {};
     this.state.roundTypes[roundName] = type;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -269,6 +306,7 @@ export class GameStateManager {
     if (!this.state.bannedThemes.includes(themeName)) {
       this.state.bannedThemes.push(themeName);
       this.state.lastUpdated = Date.now();
+      this.notifyListeners();
     }
   }
 
@@ -278,6 +316,7 @@ export class GameStateManager {
   clearBannedThemes(): void {
     this.state.bannedThemes = [];
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 
   /**
@@ -323,5 +362,6 @@ export class GameStateManager {
   setPackageName(name: string): void {
     this.state.packageName = name;
     this.state.lastUpdated = Date.now();
+    this.notifyListeners();
   }
 }

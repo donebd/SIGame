@@ -3,9 +3,10 @@
  */
 
 export type QuestionType = 'mashup' | 'audio' | 'video' | 'text' | 'select';
-export type GameMode = 'GRID' | 'ROUND' | 'RESULTS';
+export type GameMode = 'GRID' | 'QUESTION' | 'RESULTS';
 export type SpecialType = 'cat' | 'bet' | 'auction' | 'special' | null;
 export type ScreenMode = 'new' | 'popup' | 'same';
+export type ActionSource = 'desktop' | 'mobile' | 'hardware';
 
 export interface Player {
     id: number;
@@ -42,9 +43,7 @@ export interface Question {
     answerOptions?: string[]; // For 'select' type questions
 }
 
-export interface Rounds {
-    [roundName: string]: Question[];
-}
+export type Rounds = Record<string, Question[]>;
 
 export interface VisibilityState {
     music: boolean;
@@ -132,10 +131,43 @@ export interface RoundData {
     answerOptions?: string[];
 }
 
-export interface BroadcastMessage {
-    type: string;
-    [key: string]: any;
+/** Payload for a video sync event sent to the TV screen */
+export interface VideoSyncEvent {
+    event: 'play' | 'pause' | 'seek' | 'rate';
+    currentTime: number;
+    isPlaying: boolean;
+    playbackRate: number;
+    volume: number;
+    duration: number;
 }
+
+/** VIDEO_SYNC BroadcastMessage member — inline for correct discriminated union narrowing */
+export interface VideoSyncMessage extends VideoSyncEvent {
+    type: 'VIDEO_SYNC';
+}
+
+/** Payload for the special-question preview shown on TV before revealing */
+export interface SpecialPreviewData {
+    specialType: string;
+    specialTypeName: string;
+    specialIcon: string;
+    specialDescription: string;
+    score: number;
+}
+
+export type BroadcastMessage =
+    | { type: 'STATE'; state: GameState }
+    | { type: 'LOAD_ROUND_DATA'; data: RoundData }
+    | { type: 'REQUEST_SYNC' }
+    | { type: 'ANIMATE'; card: 'music' | 'text' | 'question' | 'answer' }
+    | { type: 'ANIMATE_TITLE' }
+    | { type: 'CONFETTI' }
+    | { type: 'TOGGLE_SNOW'; enabled: boolean }
+    | VideoSyncMessage
+    | { type: 'SPECIAL_PREVIEW'; data: SpecialPreviewData }
+    | { type: 'MEDIA_ACTION'; action: 'play' | 'pause' }
+    | { type: 'TOGGLE_FULLSCREEN' }
+    | { type: 'GAME_ACTION'; action: GameAction };
 
 export interface SerializedGameState extends Omit<GameState, 'rounds'> {
     rounds: Rounds;
@@ -144,3 +176,56 @@ export interface SerializedGameState extends Omit<GameState, 'rounds'> {
     playedQuestions?: number;
     totalScore?: number;
 }
+
+/** All possible action types (kept for external reference if needed) */
+export type ActionType =
+    | 'NEXT_QUESTION'
+    | 'PREV_QUESTION'
+    | 'TOGGLE_AUDIO'
+    | 'TOGGLE_VIDEO'
+    | 'AWARD_POINTS'
+    | 'REVEAL_MEDIA'
+    | 'SHOW_ANSWER'
+    | 'TOGGLE_SNOW'
+    | 'TRIGGER_CONFETTI'
+    | 'BACK_TO_GRID'
+    | 'TOGGLE_MEDIA'
+    | 'SELECT_QUESTION'
+    | 'SWITCH_ROUND'
+    | 'OPEN_SPECIAL'
+    | 'SET_SCORE'
+    | 'UPLOAD_PACK'
+    | 'UPLOAD_PACK_START'
+    | 'UPLOAD_PACK_CHUNK'
+    | 'ADD_PLAYER'
+    | 'UPDATE_PLAYER'
+    | 'REMOVE_PLAYER'
+    | 'BAN_THEME';
+
+/**
+ * Strongly-typed discriminated union of all game actions.
+ * Each case narrows `payload` automatically in a switch statement.
+ */
+export type GameAction =
+    | { type: 'TOGGLE_AUDIO';   source?: ActionSource }
+    | { type: 'TOGGLE_VIDEO';   source?: ActionSource }
+    | { type: 'SHOW_ANSWER';    source?: ActionSource }
+    | { type: 'BACK_TO_GRID';   source?: ActionSource }
+    | { type: 'TOGGLE_MEDIA';   source?: ActionSource }
+    | { type: 'TRIGGER_CONFETTI'; source?: ActionSource }
+    | { type: 'TOGGLE_SNOW';    source?: ActionSource }
+    | { type: 'REVEAL_MEDIA';   payload: 'music' | 'text' | 'question'; source?: ActionSource }
+    | { type: 'SELECT_QUESTION'; payload: string; source?: ActionSource }
+    | { type: 'SWITCH_ROUND';   payload: string; source?: ActionSource }
+    | { type: 'OPEN_SPECIAL';   payload: string; source?: ActionSource }
+    | { type: 'BAN_THEME';      payload: string; source?: ActionSource }
+    | { type: 'UPLOAD_PACK';    payload: { name: string; data: ArrayBuffer }; source?: ActionSource }
+    | { type: 'UPLOAD_PACK_START'; payload: { name: string; totalChunks: number; totalSize: number }; source?: ActionSource }
+    | { type: 'UPLOAD_PACK_CHUNK'; payload: { name: string; chunkIndex: number; totalChunks: number; data: ArrayBuffer }; source?: ActionSource }
+    | { type: 'AWARD_POINTS';   payload: { playerId: number; multiplier: 'full' | 'half' | 'minus' }; source?: ActionSource }
+    | { type: 'SET_SCORE';      payload: { playerId: number; score: number }; source?: ActionSource }
+    | { type: 'ADD_PLAYER';     payload?: { name?: string }; source?: ActionSource }
+    | { type: 'UPDATE_PLAYER';  payload: { playerId: number; name?: string; score?: number }; source?: ActionSource }
+    | { type: 'REMOVE_PLAYER';  payload: { playerId: number }; source?: ActionSource }
+    | { type: 'NEXT_QUESTION';  source?: ActionSource }
+    | { type: 'PREV_QUESTION';  source?: ActionSource };

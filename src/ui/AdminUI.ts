@@ -7,8 +7,12 @@ import { BaseUI } from './BaseUI';
 import { GameState, Player, Question } from '../types/index';
 import { getTypeIcon, getTypeName } from '../utils/helpers';
 import { t } from '../utils/i18n';
+import { GameController } from '../services/GameController';
 
 export class AdminUI extends BaseUI {
+    constructor(containerId: string, private gameController: GameController) {
+        super(containerId);
+    }
     /**
      * Render players list
      */
@@ -29,15 +33,34 @@ export class AdminUI extends BaseUI {
         players.forEach((player) => {
             const row = document.createElement('div');
             row.className = 'player-row';
-            row.innerHTML = `
-        <input class="player-name-input" value="${player.name}" 
-               onchange="window.adminUIHandlers?.onNameChange(${player.id}, this.value)" 
-               placeholder="${t('player_name')}">
-        <input type="number" class="score-input" value="${player.score}" 
-               onchange="window.adminUIHandlers?.onScoreChange(${player.id}, parseInt(this.value) || 0)">
-        <button class="player-remove-btn" onclick="window.adminUIHandlers?.onRemove(${player.id})" 
-                title="Удалить игрока">×</button>
-      `;
+
+            const nameInput = document.createElement('input');
+            nameInput.className = 'player-name-input';
+            nameInput.value = player.name;
+            nameInput.placeholder = t('player_name');
+            nameInput.addEventListener('change', () => {
+                onNameChange(player.id, nameInput.value);
+            });
+
+            const scoreInput = document.createElement('input');
+            scoreInput.type = 'number';
+            scoreInput.className = 'score-input';
+            scoreInput.value = String(player.score);
+            scoreInput.addEventListener('change', () => {
+                onScoreChange(player.id, parseInt(scoreInput.value, 10) || 0);
+            });
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'player-remove-btn';
+            removeBtn.title = t('remove_player') || 'Удалить игрока';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => {
+                onRemove(player.id);
+            });
+
+            row.appendChild(nameInput);
+            row.appendChild(scoreInput);
+            row.appendChild(removeBtn);
             container.appendChild(row);
 
             const option = document.createElement('option');
@@ -80,21 +103,31 @@ export class AdminUI extends BaseUI {
             return;
         }
 
+        // Preserve original category order from question list (no alphabetical sort)
+        const categoryOrder: string[] = [];
         const categories: { [key: string]: Question[] } = {};
         questions.forEach((q) => {
-            if (!categories[q.category]) categories[q.category] = [];
+            if (!categories[q.category]) {
+                categories[q.category] = [];
+                categoryOrder.push(q.category);
+            }
             categories[q.category].push(q);
         });
 
         const wrapper = document.createElement('div');
         wrapper.style.cssText = 'display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start;';
 
-        Object.keys(categories)
-            .sort()
-            .forEach((categoryName) => {
+        categoryOrder.forEach((categoryName) => {
                 const categoryBlock = document.createElement('div');
                 categoryBlock.className = 'category-block';
-                let html = `<div class="cat-title"> ${categoryName} </div><div class="cards-row">`;
+
+                const catTitle = document.createElement('div');
+                catTitle.className = 'cat-title';
+                catTitle.textContent = ` ${categoryName} `;
+                categoryBlock.appendChild(catTitle);
+
+                const cardsRow = document.createElement('div');
+                cardsRow.className = 'cards-row';
 
                 categories[categoryName].forEach((question) => {
                     const specialIcon = question.specialType
@@ -109,17 +142,14 @@ export class AdminUI extends BaseUI {
                                         : '❓'
                         : '';
 
-                    html += `
-            <div class="game-card ${question.played ? 'played' : ''}" 
-                 onclick="window.adminUIHandlers?.onQuestionClick('${question.id}')">
-              ${question.score} ${specialIcon}
-              <small style="font-size:0.5em;">${getTypeIcon(question.type)}</small>
-            </div>
-          `;
+                    const card = document.createElement('div');
+                    card.className = `game-card ${question.played ? 'played' : ''}`;
+                    card.innerHTML = `${question.score} ${specialIcon}<small style="font-size:0.5em;">${getTypeIcon(question.type)}</small>`;
+                    card.addEventListener('click', () => onQuestionClick(question.id));
+                    cardsRow.appendChild(card);
                 });
 
-                html += '</div>';
-                categoryBlock.innerHTML = html;
+                categoryBlock.appendChild(cardsRow);
                 wrapper.appendChild(categoryBlock);
             });
 
@@ -148,7 +178,7 @@ export class AdminUI extends BaseUI {
     /**
      * Update question panel
      */
-    updateQuestionPanel(question: Question): void {
+    updateQuestionPanel(question: Question, answerVisible: boolean = false): void {
         const typePanel = document.getElementById('admin-question-type');
         const contentPanel = document.getElementById('admin-question-content');
         const answerPanel = document.getElementById('admin-answer-content');
@@ -257,6 +287,20 @@ export class AdminUI extends BaseUI {
                 break;
         }
 
+        // Determine if video controls should be shown:
+        // 1. If it's a video question - always show controls (TVScreen falls back to question video if no answer video)
+        // 2. If there is an answerVideoUrl and answer IS visible (we are playing the answer video)
+        const isVideoQuestion = question.type === 'video';
+        const isAnswerVideo = Boolean(question.answerVideoUrl) && answerVisible;
+
+        if (isVideoQuestion || isAnswerVideo) {
+            document.getElementById('video-controls')?.classList.remove('hidden');
+        } else {
+            document.getElementById('video-controls')?.classList.add('hidden');
+            const tvVideo = document.getElementById('tv-video-player') as HTMLVideoElement | null;
+            if (tvVideo) { tvVideo.src = ''; tvVideo.load(); }
+        }
+
         // Answer panel is always visible in admin (GM needs to see it)
         // For mashup, use answer or fallback to audioFileName
         const answerText = question.type === 'mashup'
@@ -273,7 +317,8 @@ export class AdminUI extends BaseUI {
             answerHTML += `<img src="${question.answerImageUrl}" class="preview-img" style="margin-top:10px; max-width:100%;">`;
         }
         if (question.answerVideoUrl) {
-            answerHTML += `<video src="${question.answerVideoUrl}" controls style="margin-top:10px; max-width:100%;"></video>`;
+            // Video plays via the video-controls panel; just indicate it's present
+            answerHTML += `<div style="margin-top:10px; padding:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); border-radius:6px; color:#aaa; font-size:0.9em;">🎬 ${t('answer_has_video') || 'Answer video — use ▶ controls to play'}</div>`;
         }
         if (question.answerAudioUrl) {
             answerHTML += `<audio src="${question.answerAudioUrl}" controls style="margin-top:10px; width:100%;"></audio>`;

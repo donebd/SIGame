@@ -293,6 +293,17 @@ export class SiqService {
                         }
                     }
 
+                    // Resolve answer letter to full option text at parse time (single source of truth)
+                    // e.g. "b" → "b: Лондон" — consumers don't need to repeat this logic
+                    if (finalType === 'select' && answerText && answerOptions.length > 0) {
+                        const letter = answerText.trim().toLowerCase();
+                        const matched = answerOptions.find(opt =>
+                            opt.toLowerCase().startsWith(letter + ':') ||
+                            opt.toLowerCase().startsWith(letter + ' ')
+                        );
+                        if (matched) answerText = matched;
+                    }
+
                     // Parse special type (bagcat, sponsored, etc.)
                     let specialType: SpecialType = null;
                     let specialDesc = '';

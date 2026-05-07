@@ -5,6 +5,7 @@
 
 import './styles.css';
 import './results.css';
+import QRCode from 'qrcode';
 import { GameStateManager } from './state/GameState';
 import { StorageService } from './services/StorageService';
 import { SyncService } from './services/SyncService';
@@ -12,10 +13,11 @@ import { FileService } from './services/FileService';
 import { SiqService } from './services/SiqService';
 import { AudioController } from './media/AudioController';
 import { VideoController } from './media/VideoController';
+import { GameController } from './services/GameController';
 import { AdminUI } from './ui/AdminUI';
 import { FinalRoundView } from './ui/FinalRoundView';
 import { TVScreen } from './ui/TVScreen';
-import { GameState, Question, FileStorage, RoundData, SerializedGameState, BroadcastMessage } from './types/index';
+import { GameState, Question, FileStorage, RoundData, SerializedGameState, BroadcastMessage, GameAction } from './types/index';
 import { fileToBase64, getSpecialTypeName } from './utils/helpers';
 import { setLanguage, getLanguage, t, updateAllTranslations } from './utils/i18n';
 
@@ -25,6 +27,16 @@ const storageService = new StorageService();
 const syncService = new SyncService();
 const fileService = new FileService();
 const siqService = new SiqService();
+// Initialize GameController early
+const gameController = new GameController(
+  stateManager,
+  syncService,
+  storageService,
+  fileService,
+  siqService,
+  null,
+  null
+);
 
 // Flag to prevent double processing of folder load
 let isFolderLoading = false;
@@ -39,7 +51,7 @@ let finalRoundView: FinalRoundView | null = null;
 let tvScreen: TVScreen | null = null;
 let audioController: AudioController | null = null;
 let videoController: VideoController | null = null;
-let fileStorage: FileStorage = {};
+// fileStorage moved to FileService
 
 // Initialize based on screen type
 if (isGameScreen) {
@@ -52,8 +64,30 @@ if (isGameScreen) {
  * Initialize Admin Screen
  */
 function initAdminScreen(): void {
-  adminUI = new AdminUI('admin-ui');
+  // Init controllers first
+  const audioElement = document.getElementById('master-audio') as HTMLAudioElement;
+  const videoElement = document.getElementById('master-video') as HTMLVideoElement;
+  const videoDisplay = document.getElementById('master-video-display') as HTMLVideoElement;
+
+  if (audioElement) {
+    audioController = new AudioController(audioElement);
+    gameController.setAudioController(audioController);
+  }
+
+  if (videoDisplay) {
+    videoController = new VideoController(videoDisplay);
+    gameController.setVideoController(videoController);
+    gameController.registerSelectQuestionCallback(selectQuestion);
+    gameController.registerOpenSpecialCallback(openSpecialQuestion);
+  }
+
+  adminUI = new AdminUI('admin-ui', gameController);
   adminUI.show();
+
+  // Subscribe to state changes to update UI
+  stateManager.subscribe(() => {
+    renderAdminUI();
+  });
 
   // Init Final Round View
   const gridView = document.getElementById('grid-view');
@@ -70,17 +104,7 @@ function initAdminScreen(): void {
     );
   }
 
-  const audioElement = document.getElementById('master-audio') as HTMLAudioElement;
-  const videoElement = document.getElementById('master-video') as HTMLVideoElement;
-  const videoDisplay = document.getElementById('master-video-display') as HTMLVideoElement;
-
-  if (audioElement) {
-    audioController = new AudioController(audioElement);
-  }
-
-  if (videoDisplay) {
-    videoController = new VideoController(videoDisplay);
-  }
+  // Controllers initialized above
 
   // Load saved state
   const savedPlayers = storageService.loadPlayers();
@@ -97,6 +121,15 @@ function initAdminScreen(): void {
   syncService.onMessage((message) => {
     if (message && message.type === 'REQUEST_SYNC') {
       syncService.syncState(stateManager.getState());
+    }
+
+    // Handle remote control actions
+    if (message && message.type === 'GAME_ACTION' && message.action) {
+      gameController.dispatch(message.action as GameAction);
+    }
+
+    if (message && message.type === 'TOGGLE_FULLSCREEN') {
+      syncService.sendToggleFullscreen();
     }
   });
 
@@ -183,6 +216,28 @@ function initTVScreen(): void {
         seekBar.value = tvVideo.currentTime.toString();
       }
     };
+
+    // Setup fullscreen button
+    const fsBtn = document.getElementById('tv-video-fullscreen');
+    if (fsBtn) {
+      fsBtn.onclick = () => {
+        const videoContainer = document.querySelector('#tv-video-content .video-player') as HTMLElement;
+        if (!videoContainer) return;
+
+        // Toggle CSS pseudo-fullscreen on body
+        document.body.classList.toggle('tv-is-fullscreen');
+
+        const isFullscreen = document.body.classList.contains('tv-is-fullscreen');
+        fsBtn.textContent = isFullscreen ? '✖' : '⛶';
+        fsBtn.title = isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран';
+
+        if (isFullscreen) {
+          tvVideo.style.maxHeight = '100%';
+        } else {
+          tvVideo.style.maxHeight = '60vh';
+        }
+      };
+    }
   }
 
   // Setup sync service for TV
@@ -282,6 +337,37 @@ function setupAdminEventListeners(): void {
         console.error('Ошибка загрузки состояния:', error);
       });
     }
+  });
+
+  // Remote Control
+  document.getElementById('remote-control-btn')?.addEventListener('click', async () => {
+    const modal = document.getElementById('remote-modal');
+    const canvas = document.getElementById('qrcode-canvas') as HTMLCanvasElement;
+    const peerIdDisplay = document.getElementById('peer-id-display');
+
+    if (modal && canvas) {
+      modal.classList.remove('hidden');
+
+      try {
+        const peerId = await syncService.initPeerSync();
+
+        if (peerIdDisplay) {
+          peerIdDisplay.textContent = `ID: ${peerId}`;
+        }
+
+        // Generate URL for mobile client
+        const url = `${window.location.origin}/mobile.html?host=${peerId}`;
+
+        await QRCode.toCanvas(canvas, url, { width: 256, margin: 2 });
+      } catch (error) {
+        console.error('Error initializing remote control:', error);
+        alert(t('error') + ': ' + error);
+      }
+    }
+  });
+
+  document.getElementById('close-remote-modal')?.addEventListener('click', () => {
+    document.getElementById('remote-modal')?.classList.add('hidden');
   });
 
   // Language toggle
@@ -455,9 +541,7 @@ function setupAudioControls(): void {
   const playBtn = document.getElementById('play-btn');
   if (playBtn && audioController) {
     playBtn.addEventListener('click', () => {
-      const isPlaying = audioController!.toggle();
-      stateManager.setPlaying(isPlaying);
-      syncService.syncState(stateManager.getState());
+      gameController.dispatch({ type: 'TOGGLE_AUDIO' });
       updatePlayButtonText();
     });
   }
@@ -496,9 +580,7 @@ function setupVideoControls(): void {
   const videoPlayBtn = document.getElementById('video-play-btn-small');
   if (videoPlayBtn && videoController) {
     videoPlayBtn.addEventListener('click', () => {
-      const isPlaying = videoController!.toggle();
-      stateManager.setVideoPlaying(isPlaying);
-      syncService.syncState(stateManager.getState());
+      gameController.dispatch({ type: 'TOGGLE_VIDEO' });
       updateVideoPlayButtonText();
     });
   }
@@ -558,6 +640,11 @@ function setupVideoControls(): void {
     }
   });
 
+  // Fullscreen toggle via SyncService
+  document.getElementById('admin-video-fullscreen-btn')?.addEventListener('click', () => {
+    syncService.sendToggleFullscreen();
+  });
+
   document.getElementById('video-seek-forward-10')?.addEventListener('click', () => {
     if (videoController) {
       videoController.seekRelative(10);
@@ -597,10 +684,7 @@ function setupQuestionControls(): void {
     if (!question || question.type !== 'mashup') return;
 
     if (!stateManager.getState().visible.music) {
-      stateManager.setVisibility({ music: true });
-      syncService.triggerAnimation('music');
-      syncService.syncState(stateManager.getState());
-      storageService.saveGameState(stateManager.getState());
+      gameController.dispatch({ type: 'REVEAL_MEDIA', payload: 'music' });
     }
 
     // Show image in admin panel
@@ -619,10 +703,7 @@ function setupQuestionControls(): void {
     if (!question || question.type !== 'mashup') return;
 
     if (!stateManager.getState().visible.text) {
-      stateManager.setVisibility({ text: true });
-      syncService.triggerAnimation('text');
-      syncService.syncState(stateManager.getState());
-      storageService.saveGameState(stateManager.getState());
+      gameController.dispatch({ type: 'REVEAL_MEDIA', payload: 'text' });
     }
 
     // Show image in admin panel
@@ -641,10 +722,7 @@ function setupQuestionControls(): void {
     if (!question || question.type === 'mashup') return;
 
     // Switch to question view (hide answer)
-    stateManager.setVisibility({ question: true, answer: false });
-    syncService.triggerAnimation('question');
-    syncService.syncState(stateManager.getState());
-    storageService.saveGameState(stateManager.getState());
+    gameController.dispatch({ type: 'REVEAL_MEDIA', payload: 'question' });
   });
 
   // Show answer button
@@ -652,49 +730,17 @@ function setupQuestionControls(): void {
     const question = stateManager.getCurrentQuestion();
 
     // Switch to answer view (hide question)
-    // Note: For mashup, 'question' flag is not used for boxes (music/text flags are used), 
-    // so this won't hide mashup boxes, which is likely desired.
-    // Also reveal hidden mashup parts (music/text) when showing answer
-    const visibilityUpdates: any = { question: false, answer: true };
+    gameController.dispatch({ type: 'SHOW_ANSWER' });
 
-    if (question && question.type === 'mashup') {
-      visibilityUpdates.music = true;
-      visibilityUpdates.text = true;
+    // Refresh admin panel with answerVisible=true so video-controls appear if answerVideo exists
+    if (question && adminUI) {
+      adminUI.updateQuestionPanel(question, true);
     }
-
-    stateManager.setVisibility(visibilityUpdates);
-
-    // Pause video if playing
-    if (videoController && videoController.isPlaying()) {
-      videoController.pause();
-      stateManager.setVideoPlaying(false);
-    }
-
-    // Switch master player to answer video if available
-    const currentQ = stateManager.getCurrentQuestion();
-    if (currentQ && videoController) {
-      const files = fileStorage[currentQ.id];
-      if (files && files.answerVideo) {
-        // Create a temporary URL for the admin player
-        const answerVideoUrl = URL.createObjectURL(files.answerVideo);
-        videoController.setSource(answerVideoUrl);
-      }
-    }
-
-
-    if (question && question.type === 'mashup') {
-      syncService.triggerTitleAnimation();
-    } else {
-      syncService.triggerAnimation('answer');
-    }
-
-    syncService.syncState(stateManager.getState());
-    storageService.saveGameState(stateManager.getState());
   });
 
   // Confetti button
   document.getElementById('confetti-btn')?.addEventListener('click', () => {
-    syncService.triggerConfetti();
+    gameController.dispatch({ type: 'TRIGGER_CONFETTI' });
   });
 }
 
@@ -791,63 +837,27 @@ async function handleSiqLoad(event: Event): Promise<void> {
 
   // Update status
   const loadStatus = document.getElementById('siq-load-status');
-  if (loadStatus) {
-    loadStatus.textContent = t('loading'); // "Загрузка..."
-    loadStatus.style.color = '#03dac6';
-  }
 
   try {
+    if (loadStatus) {
+      loadStatus.textContent = t('loading'); // "Загрузка..."
+      loadStatus.style.color = '#03dac6';
+    }
+
     const file = input.files[0];
     input.value = ''; // Clear input
 
-    const result = await siqService.parseSiq(file);
+    await gameController.loadPack(file);
 
-    // Merge file storage
-    fileStorage = { ...fileStorage, ...result.fileStorage };
-
-    // Set round types
-    if (result.roundTypes) {
-      Object.entries(result.roundTypes).forEach(([name, type]) => {
-        stateManager.setRoundType(name, type);
-      });
-    }
-
-    // Create game state - preserve order of appearance
-    const roundNames: string[] = [];
-    const roundData = result.questions.reduce((acc, q) => {
-      if (!acc[q.round]) {
-        acc[q.round] = [];
-        roundNames.push(q.round);
-      }
-      acc[q.round].push(q);
-      return acc;
-    }, {} as Record<string, Question[]>);
-
-    // Sort questions within rounds by score
-    Object.values(roundData).forEach(questions => {
-      questions.sort((a, b) => a.score - b.score);
-    });
-
-    // Set game state - NO SORT for roundNames
-    stateManager.setRounds(roundData, roundNames);
-    stateManager.setLoadedFolder(file.name.replace('.siq', ''));
-    stateManager.setPackageName(file.name);
-
-    // Restore current round
-    if (stateManager.getState().currentRoundName && roundNames.includes(stateManager.getState().currentRoundName)) {
-      // Keep current
-    } else if (roundNames.length > 0) {
-      stateManager.setCurrentRoundName(roundNames[0]);
-    }
-
+    // UI Updates are handled by state subscription, except for status text
     renderAdminUI();
-    syncService.syncState(stateManager.getState());
-    storageService.saveGameState(stateManager.getState());
 
     if (loadStatus) {
-      const totalQuestions = result.questions.length;
-      const roundsCount = roundNames.length;
-      loadStatus.textContent = `${t('files_loaded')}: ${roundsCount} ${t('rounds_count')}, ${totalQuestions} ${t('questions_count')}`;
+      const state = gameController['stateManager'].getState(); // accessing private property for quick fix, or use public getter if available. 
+      // Actually GameController doesn't expose stateManager.
+      // I should use gameController to get info if possible.
+      // Or just say "Pack loaded successfully".
+      loadStatus.textContent = t('ready');
     }
 
   } catch (error) {
@@ -908,7 +918,7 @@ async function handleFolderLoad(event: Event): Promise<void> {
     const structure = fileService.parseFileStructure(files);
     const { questions, fileStorage: storage } = await fileService.processFiles(structure);
 
-    fileStorage = storage;
+    fileService.setFileStorage(storage);
 
     // Convert to rounds format
     const rounds: { [key: string]: Question[] } = {};
@@ -1160,7 +1170,7 @@ function renderAdminUI(): void {
     const activeFinalContainer = document.getElementById('final-round-container');
     if (activeFinalContainer) activeFinalContainer.classList.add('hidden');
 
-    if (state.mode === 'ROUND') {
+    if (state.mode === 'QUESTION') {
       if (gridView) gridView.classList.add('hidden');
       if (finalContainer) finalContainer.classList.add('hidden');
       if (roundControl) roundControl.classList.remove('hidden');
@@ -1238,7 +1248,7 @@ async function selectQuestion(questionId: string): Promise<void> {
   });
 
   stateManager.setCurrentQuestion(questionId);
-  stateManager.setMode('ROUND');
+  stateManager.setMode('QUESTION');
   stateManager.markQuestionPlayed(questionId, true);
 
   // Show round control panel (only on admin screen, not TV)
@@ -1374,7 +1384,7 @@ async function selectQuestion(questionId: string): Promise<void> {
 
   // Update UI
   if (adminUI) {
-    adminUI.updateQuestionPanel(question);
+    adminUI.updateQuestionPanel(question, stateManager.getState().visible?.answer ?? false);
   }
 
   // Send to TV
@@ -1387,7 +1397,7 @@ async function selectQuestion(questionId: string): Promise<void> {
     answerOptions: question.answerOptions,
   };
 
-  const files = fileStorage[questionId];
+  const files = fileService.getFiles(questionId);
   if (files) {
     // Mashup media
     if (question.type === 'mashup') {
@@ -1496,7 +1506,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
 
   // Update UI
   if (adminUI) {
-    adminUI.updateQuestionPanel(question);
+    adminUI.updateQuestionPanel(question, stateManager.getState().visible?.answer ?? false);
   }
 
   // Send to TV
@@ -1509,7 +1519,7 @@ async function openSpecialQuestion(questionId: string): Promise<void> {
     answerOptions: question.answerOptions,
   };
 
-  const files = fileStorage[questionId];
+  const files = fileService.getFiles(questionId);
   if (files) {
     // Mashup media
     if (question.type === 'mashup') {
@@ -1583,10 +1593,9 @@ function handleTVMessage(message: BroadcastMessage): void {
       break;
 
     case 'LOAD_ROUND_DATA':
-    case 'ROUND_DATA':
       // Store round data in window for TV screen access
       if (message.data && typeof message.data === 'object') {
-        const roundData = message.data as Record<string, unknown>;
+        const roundData = message.data as unknown as Record<string, unknown>;
         (window as Window & { roundData?: Record<string, unknown> }).roundData = roundData;
         tvScreen.setRoundData(roundData);
 
@@ -1638,12 +1647,47 @@ function handleTVMessage(message: BroadcastMessage): void {
       }
       break;
 
+    case 'SPECIAL_PREVIEW':
+      const specialData = (message as any).data;
+      tvScreen.renderSpecialPreview(specialData);
+      break;
+
+    case 'MEDIA_ACTION':
+      const mediaAction = (message as any).action;
+      if (mediaAction === 'play') {
+        tvScreen.playVideo();
+      } else {
+        tvScreen.pauseVideo();
+      }
+      break;
+
+    case 'TOGGLE_FULLSCREEN':
+      const videoContainer = document.querySelector('#tv-video-content .video-player') as HTMLElement;
+      if (videoContainer) {
+        document.body.classList.toggle('tv-is-fullscreen');
+
+        const isFullscreen = document.body.classList.contains('tv-is-fullscreen');
+        // Also update local button
+        const fsBtn = document.getElementById('tv-video-fullscreen');
+        if (fsBtn) {
+          fsBtn.textContent = isFullscreen ? '✖' : '⛶';
+          fsBtn.title = isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран';
+        }
+
+        const tvVideo = document.getElementById('tv-video-player') as HTMLVideoElement;
+        if (tvVideo) {
+          if (isFullscreen) {
+            tvVideo.style.maxHeight = '100%';
+          } else {
+            tvVideo.style.maxHeight = '60vh';
+          }
+        }
+      }
+      break;
+
     case 'ANIMATE':
       if (message.card === 'music') {
         const currentState = (window as any).currentGameState;
-        if (currentState && currentState.visible) {
-          currentState.visible.music = true;
-        }
         // Update image if we have roundData
         const roundData = (window as any).roundData;
         if (roundData && roundData.music && tvScreen) {

@@ -1,10 +1,13 @@
 {
   "name": "SIGame",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "SIGame Engine - Multi-format Open Source Web Quiz Engine",
   "main": "dist/SIGame.html",
   "scripts": {
+    "start": "concurrently \"npm run peer-server\" \"webpack serve --mode development\"",
+    "peer-server": "peerjs --port 9001 --key peerjs --path /",
     "build": "webpack --mode production",
+    "package": "npm run build && powershell -Command \"Compress-Archive -Path dist\\SIGame.html,dist\\mobile.html,scripts\\start-peer-server.bat,scripts\\start-peer-server.sh,scripts\\README.txt,scripts\\README.ru.txt -DestinationPath SIGame-v%npm_package_version%.zip -Force; Write-Host 'Done: SIGame-v%npm_package_version%.zip'\"",
     "dev": "webpack --mode development --watch",
     "serve": "webpack serve --mode development",
     "type-check": "tsc --noEmit",
@@ -26,6 +29,8 @@
     "@types/jest": "^30.0.0",
     "@types/jszip": "^3.4.0",
     "@types/node": "^20.10.0",
+    "@types/qrcode": "^1.5.6",
+    "concurrently": "^9.2.1",
     "css-loader": "^6.8.1",
     "fast-xml-parser": "^5.3.4",
     "html-webpack-plugin": "^5.5.3",
@@ -33,6 +38,7 @@
     "jest-environment-jsdom": "^30.2.0",
     "jszip": "^3.10.1",
     "mini-css-extract-plugin": "^2.9.4",
+    "peer": "^1.0.2",
     "style-loader": "^3.3.3",
     "ts-jest": "^29.4.6",
     "ts-loader": "^9.5.1",
@@ -41,5 +47,9 @@
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^4.15.1"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.5",
+    "qrcode": "^1.5.4"
   }
 }

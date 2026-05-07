@@ -3,132 +3,176 @@
  * Single Responsibility: Managing state synchronization between admin and TV screens
  */
 
-import { GameState, BroadcastMessage, RoundData } from '../types/index';
-import { BROADCAST_CHANNEL_NAME } from '../types/constants';
+import { GameState, BroadcastMessage, RoundData, VideoSyncEvent, SpecialPreviewData } from '../types/index';
+import { ISyncProvider } from './sync/ISyncProvider';
+import { BroadcastChannelProvider } from './sync/BroadcastChannelProvider';
+import { PeerSyncProvider } from './sync/PeerSyncProvider';
 
 export class SyncService {
-  private channel: BroadcastChannel;
+  private providers: ISyncProvider[] = [];
+  private onMessageCallback?: (message: BroadcastMessage) => void;
 
   constructor() {
-    // Use native BroadcastChannel API
-    this.channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+    // Initialize default provider
+    this.addProvider(new BroadcastChannelProvider());
+  }
+
+  /**
+   * Initialize PeerJS synchronization
+   */
+  /**
+   * Whether a PeerSyncProvider has already been initialised
+   */
+  private peerProvider: PeerSyncProvider | null = null;
+
+  async initPeerSync(): Promise<string> {
+    // Guard: reuse existing provider instead of creating a second one
+    if (this.peerProvider) {
+      return this.peerProvider.getPeerId();
+    }
+    this.peerProvider = new PeerSyncProvider();
+    this.addProvider(this.peerProvider);
+    return this.peerProvider.getPeerId();
+  }
+
+  /**
+   * Add a synchronization provider
+   */
+  addProvider(provider: ISyncProvider): void {
+    this.providers.push(provider);
+
+    // If we already have a message listener, subscribe the new provider
+    if (this.onMessageCallback) {
+      provider.onMessage(this.onMessageCallback);
+    }
+  }
+
+  /**
+   * Broadcast message to all providers
+   */
+  private broadcast(message: BroadcastMessage): void {
+    this.providers.forEach(p => p.send(message));
   }
 
   /**
    * Send game state to TV screen
    */
   syncState(state: GameState): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'STATE',
       state,
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send round data to TV screen
    */
   sendRoundData(data: RoundData): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'LOAD_ROUND_DATA',
       data,
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Request state sync from admin
    */
   requestSync(): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'REQUEST_SYNC',
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send animation trigger
    */
   triggerAnimation(card: 'music' | 'text' | 'question' | 'answer'): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'ANIMATE',
       card,
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send title animation trigger
    */
   triggerTitleAnimation(): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'ANIMATE_TITLE',
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send confetti trigger
    */
   triggerConfetti(): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'CONFETTI',
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send snow toggle
    */
   toggleSnow(enabled: boolean): void {
-    this.channel.postMessage({
+    this.broadcast({
       type: 'TOGGLE_SNOW',
       enabled,
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send video sync event
    */
-  syncVideo(event: {
-    event: string;
-    currentTime: number;
-    isPlaying: boolean;
-    playbackRate: number;
-    volume: number;
-    duration: number;
-  }): void {
-    this.channel.postMessage({
+  syncVideo(event: VideoSyncEvent): void {
+    this.broadcast({
       type: 'VIDEO_SYNC',
       ...event,
-    } as BroadcastMessage);
+    });
   }
 
   /**
    * Send special preview
    */
-  sendSpecialPreview(data: {
-    specialType: string;
-    specialTypeName: string;
-    specialIcon: string;
-    specialDescription: string;
-    score: number;
-  }): void {
-    this.channel.postMessage({
+  sendSpecialPreview(data: SpecialPreviewData): void {
+    this.broadcast({
       type: 'SPECIAL_PREVIEW',
       data,
-    } as BroadcastMessage);
+    });
+  }
+
+  /**
+   * Send media action (play/pause)
+   */
+  sendMediaAction(action: 'play' | 'pause'): void {
+    this.broadcast({
+      type: 'MEDIA_ACTION',
+      action,
+    });
+  }
+
+  /**
+   * Send toggle fullscreen
+   */
+  sendToggleFullscreen(): void {
+    this.broadcast({ type: 'TOGGLE_FULLSCREEN' });
   }
 
   /**
    * Subscribe to messages
    */
   onMessage(callback: (message: BroadcastMessage) => void): void {
-    this.channel.onmessage = (event: MessageEvent) => {
-      // BroadcastChannel sends MessageEvent, extract data
-      const message = event.data as BroadcastMessage;
-      callback(message);
-    };
+    this.onMessageCallback = callback;
+    this.providers.forEach(p => p.onMessage(callback));
   }
 
   /**
-   * Close channel
+   * Close channel and reset all state
    */
   close(): void {
-    this.channel.close();
+    this.providers.forEach(p => p.close());
+    this.providers = [];
+    this.peerProvider = null;
+    this.onMessageCallback = undefined;
   }
 }

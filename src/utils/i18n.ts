@@ -136,6 +136,12 @@ const translations: Translations = {
   special_type_auction: { ru: 'Аукцион', en: 'Auction' },
   special_type_special: { ru: 'Специальный раунд', en: 'Special Round' },
 
+  // Remote Control Modal
+  remote_control: { ru: '🎮 Удалённое управление', en: '🎮 Remote Control' },
+  remote_control_title: { ru: '📱 Дистанционное управление', en: '📱 Remote Control' },
+  remote_control_desc: { ru: 'Сканируйте QR-код телефоном для управления игрой', en: 'Scan the QR code with your phone to control the game' },
+  close: { ru: 'Закрыть', en: 'Close' },
+
   // Holiday
   new_year_greeting: { ru: '🎄 С Новым Годом! 🎅', en: '🎄 Happy New Year! 🎅' },
 
